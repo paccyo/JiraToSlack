@@ -3,3 +3,4 @@ slack-bolt
 functions-framework 
 google-cloud-secret-manager
 python-dotenv
+google-generativeai
