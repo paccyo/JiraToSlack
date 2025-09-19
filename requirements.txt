@@ -1,1 +1,4 @@
 jira
+slack-bolt 
+functions-framework 
+google-cloud-secret-manager
