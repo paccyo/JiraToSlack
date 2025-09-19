@@ -16,6 +16,8 @@ def register_commands(app):
     @app.command("/jira_get_tasks")
     def handle_jira_get_tasks_command(ack, body, say):
         ack()
+        say(f"user query: {body["text"]}")
+        say("処理中...")
         command_jira_get_tasks_repository = Command_Jira_Get_Tasks_Responce()
         responce = command_jira_get_tasks_repository.execute(body)
         say(responce)
