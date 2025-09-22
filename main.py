@@ -5,6 +5,7 @@ import sys
 from slack_bolt import App
 from slack_bolt.adapter.google_cloud_functions import SlackRequestHandler
 from dotenv import load_dotenv
+import commands
 
 load_dotenv()
 
@@ -29,13 +30,14 @@ app = App(
     process_before_response=True # 3秒タイムアウトを回避するために推奨
 )
 
-@app.command("/jira")
-def handle_jira_command(ack, say):
-    ack()
-    say("Hello World")
+# Register commands
+commands.register_commands(app)
 
 # Cloud Functionsのエントリーポイント
 handler = SlackRequestHandler(app)
 def handle_slack_events(req):
     """Slackからのリクエストを処理する関数"""
     return handler.handle(req)
+
+# if __name__ == "__main__":
+#     app.start(port=int(os.environ.get("PORT", 3000)))
