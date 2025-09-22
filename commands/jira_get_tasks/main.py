@@ -9,7 +9,7 @@ class Command_Jira_Get_Tasks_Responce:
             raise ValueError("FATAL ERROR: Environment variable GEMINI_API_KEY is not set.")
 
         genai.configure(api_key=gemini_api_key)
-        self.model = genai.GenerativeModel('Gemini 2.5 Flash-Lite')
+        self.model = genai.GenerativeModel('gemini-2.5-flash')
     
     def execute(self, body):
         text = body["text"]
