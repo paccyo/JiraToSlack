@@ -1,0 +1,26 @@
+{
+  "sprint": {
+    "name": "SCRUM スプリント 1",
+    "startDate": "2025-09-17T08:53:35.977Z",
+    "endDate": "2025-09-24T08:53:00.000Z"
+  },
+  "totals": {
+    "parents": 3,
+    "subtasks": 11,
+    "done": 4,
+    "notDone": 7
+  },
+  "doneRate": 0.36363636363636365,
+  "targetDoneRate": 0.8,
+  "axis": "percent",
+  "extrasAvailable": {
+    "burndown": true,
+    "velocity": true,
+    "status_counts": true,
+    "time_in_status": true,
+    "workload": true,
+    "kpis": true,
+    "risks": true,
+    "evidence": true
+  }
+}

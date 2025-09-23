@@ -1,0 +1,47 @@
+import os
+import sys
+import json
+import argparse
+from pathlib import Path
+
+# Allow local imports
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from lib.jira_client import JiraClient  # type: ignore
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Unassigned issues count")
+    parser.add_argument("--scope", choices=["project", "sprint"], default=os.getenv("UA_SCOPE", "sprint"))
+    parser.add_argument("--project", help="Project key when scope=project")
+    args = parser.parse_args()
+
+    jc = JiraClient()
+
+    if args.scope == "sprint":
+        code_sp, sprint, err_sp = jc.resolve_active_sprint()
+        if code_sp != 200 or not sprint:
+            print(err_sp or "アクティブスプリントが見つかりません", file=sys.stderr)
+            return 1
+        base = f"Sprint={sprint.get('id')}"
+        meta = {"scope": "sprint", "sprint": {"id": sprint.get("id"), "name": sprint.get("name")}}
+    else:
+        key = args.project or jc.resolve_project_key()
+        if not key:
+            print("プロジェクトキーの解決に失敗", file=sys.stderr)
+            return 1
+        base = f"project={key}"
+        meta = {"scope": "project", "project": key}
+
+    jql = f"{base} AND assignee is EMPTY"
+    code_c, cnt, err_c = jc.approximate_count(jql)
+    if code_c != 200 or cnt is None:
+        print(err_c or "件数取得に失敗", file=sys.stderr)
+        return 1
+
+    out = {**meta, "unassignedCount": int(cnt)}
+    print(json.dumps(out, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

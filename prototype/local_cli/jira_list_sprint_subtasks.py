@@ -79,6 +79,73 @@ def api_post(
         return resp.status_code, None, resp.text
 
 
+def resolve_story_points_field(
+    JIRA_DOMAIN: str, auth: HTTPBasicAuth
+) -> Optional[str]:
+    """
+    ストーリーポイントのフィールドIDを返す。
+    優先順位: 環境変数 > API検出 > customfield_10016（デフォルト）
+    """
+    sp_env = os.getenv("JIRA_STORY_POINTS_FIELD")
+    if sp_env:
+        return sp_env
+
+    try:
+        resp = requests.get(
+            f"{JIRA_DOMAIN}/rest/api/3/field",
+            auth=auth,
+            headers={"Accept": "application/json"},
+            timeout=30,
+        )
+    except requests.RequestException:
+        return "customfield_10016"
+
+    if resp.status_code != 200:
+        return "customfield_10016"
+    try:
+        fields = resp.json()
+    except json.JSONDecodeError:
+        return "customfield_10016"
+
+    chosen: Optional[str] = None
+    if isinstance(fields, list):
+        # 1) スキーマから厳密判定
+        for f in fields:
+            schema = f.get("schema") or {}
+            if schema.get("custom") == "com.pyxis.greenhopper.jira:jsw-story-points":
+                chosen = str(f.get("id"))
+                break
+        # 2) 名前のヒューリスティック
+        if not chosen:
+            candidates: List[Dict[str, Any]] = []
+            for f in fields:
+                name = str(f.get("name", ""))
+                if name and ("story point" in name.lower() or "ストーリーポイント" in name):
+                    candidates.append(f)
+
+            def priority(f: Dict[str, Any]) -> int:
+                n = str(f.get("name", "")).lower()
+                if "story points" in n:
+                    return 0
+                if "story point estimate" in n:
+                    return 1
+                return 2
+
+            if candidates:
+                candidates.sort(key=priority)
+                chosen = str(candidates[0].get("id"))
+
+        # 3) customfield_10016 が存在するならそれを優先
+        if not chosen:
+            for f in fields:
+                if str(f.get("id")) == "customfield_10016":
+                    chosen = "customfield_10016"
+                    break
+
+    # 4) 最終フォールバック
+    return chosen or "customfield_10016"
+
+
 def resolve_board(JIRA_DOMAIN: str, auth: HTTPBasicAuth) -> Tuple[int, Optional[Dict[str, Any]], str]:
     board_id = os.getenv("JIRA_BOARD_ID")
     project_key = os.getenv("JIRA_PROJECT_KEY")
@@ -163,11 +230,7 @@ def resolve_active_sprint(
     sprints = data.get("values", [])
     if not sprints:
         return 404, None, "アクティブなスプリントが見つかりません"
-    if len(sprints) > 1:
-        msg = "複数のアクティブスプリントが見つかりました。JIRA_SPRINT_ID を設定してください:\n" + "\n".join(
-            [f"  - {s.get('name')} (id={s.get('id')})" for s in sprints]
-        )
-        return 409, None, msg
+    # 複数あってもPoCでは先頭を採用
     return 200, sprints[0], ""
 
 
@@ -262,18 +325,22 @@ def agile_list_issues_in_sprint(
 
 
 def ensure_subtask_fields(
-    JIRA_DOMAIN: str, auth: HTTPBasicAuth, subtask: Dict[str, Any]
+    JIRA_DOMAIN: str, auth: HTTPBasicAuth, subtask: Dict[str, Any], sp_field_id: Optional[str]
 ) -> Tuple[int, Optional[Dict[str, Any]], str]:
-    fields = subtask.get("fields")
-    if fields and fields.get("status") and fields.get("summary"):
+    fields = subtask.get("fields") or {}
+    # 既にsummary/statusがあり、かつSPも揃っていればそのまま返す
+    if fields.get("status") and fields.get("summary") and (not sp_field_id or sp_field_id in fields):
         return 200, subtask, ""
 
     sub_id = subtask.get("id") or subtask.get("key")
     if not sub_id:
         return 400, None, "サブタスクのID/Keyが取得できませんでした"
 
+    query_fields = ["summary", "status"]
+    if sp_field_id:
+        query_fields.append(sp_field_id)
     code, data, err = api_get(
-        f"{JIRA_DOMAIN}/rest/api/3/issue/{sub_id}", auth, params={"fields": "summary,status"}
+        f"{JIRA_DOMAIN}/rest/api/3/issue/{sub_id}", auth, params={"fields": ",".join(query_fields)}
     )
     if code != 200 or not data:
         return code, None, f"サブタスク詳細取得に失敗: {err}"
@@ -284,6 +351,8 @@ def ensure_subtask_fields(
         "summary": data.get("fields", {}).get("summary"),
         "status": data.get("fields", {}).get("status"),
     })
+    if sp_field_id and sp_field_id in (data.get("fields") or {}):
+        subtask["fields"][sp_field_id] = data.get("fields", {}).get(sp_field_id)
     return 200, subtask, ""
 
 
@@ -325,16 +394,21 @@ def list_and_print_subtasks(
     auth: HTTPBasicAuth,
     issues_source: List[Dict[str, Any]] | None,
     header: str,
+    sp_field_id: Optional[str],
 ) -> int:
     issues = issues_source or []
 
-    print(header)
-    print("")
+    output_json = os.getenv("OUTPUT_JSON") == "1"
+    if not output_json:
+        print(header)
+        print("")
 
     total_parents = 0
     total_subtasks = 0
     total_done = 0
+    agg_by_assignee: Dict[str, Dict[str, Any]] = {}
 
+    results: List[Dict[str, Any]] = []
     for issue in issues:
         fields = issue.get("fields", {})
         subtasks = fields.get("subtasks", []) or []
@@ -345,11 +419,18 @@ def list_and_print_subtasks(
         parent_key = issue.get("key")
         parent_summary = fields.get("summary")
         assignee = (fields.get("assignee") or {}).get("displayName")
-        print(f"親タスク {parent_key} - {parent_summary}{' / 担当: ' + assignee if assignee else ''}")
+        if not output_json:
+            print(f"親タスク {parent_key} - {parent_summary}{' / 担当: ' + assignee if assignee else ''}")
+        parent_entry: Dict[str, Any] = {
+            "parentKey": parent_key,
+            "parentSummary": parent_summary,
+            "assignee": assignee,
+            "subtasks": [],
+        }
 
         parent_done = 0
         for sub in subtasks:
-            code_s, sub_full, err_s = ensure_subtask_fields(JIRA_DOMAIN, auth, sub)
+            code_s, sub_full, err_s = ensure_subtask_fields(JIRA_DOMAIN, auth, sub, sp_field_id)
             if code_s != 200 or not sub_full:
                 print(f"  - {sub.get('key') or sub.get('id')} 取得失敗: {err_s}")
                 continue
@@ -358,27 +439,79 @@ def list_and_print_subtasks(
             sub_fields = sub_full.get("fields", {})
             sub_summary = sub_fields.get("summary")
             status = sub_fields.get("status")
+            # ストーリーポイント取得（未設定は1）
+            sp_value: Optional[float] = None
+            if sp_field_id:
+                sp_raw = sub_fields.get(sp_field_id)
+                if isinstance(sp_raw, (int, float)):
+                    sp_value = float(sp_raw)
+                else:
+                    sp_value = None
+            if sp_value is None:
+                sp_value = 1.0
             done_flag = is_done(status)
 
             status_name = (status or {}).get("name") or "(不明)"
             badge = "Done" if done_flag else ("Not Done" if done_flag is False else "Unknown")
-            print(f"  - [{badge}] {sub_key} - {sub_summary} (Status: {status_name})")
+            if not output_json:
+                print(f"  - [{badge}] {sub_key} - {sub_summary} (Status: {status_name}, SP: {sp_value:g})")
+            parent_entry["subtasks"].append({
+                "key": sub_key,
+                "summary": sub_summary,
+                "status": status_name,
+                "done": bool(done_flag) if done_flag is not None else None,
+                "storyPoints": sp_value,
+            })
+
+            # 担当者別集計
+            who = assignee or "(未割り当て)"
+            cur = agg_by_assignee.get(who) or {"assignee": who, "subtasks": 0, "done": 0, "storyPoints": 0.0}
+            cur["subtasks"] += 1
+            cur["storyPoints"] += float(sp_value)
+            if done_flag:
+                cur["done"] += 1
+            agg_by_assignee[who] = cur
 
             total_subtasks += 1
             if done_flag:
                 total_done += 1
                 parent_done += 1
 
-        print(f"    小タスク完了: {parent_done}/{len(subtasks)}")
-        print("")
+        if not output_json:
+            print(f"    小タスク完了: {parent_done}/{len(subtasks)}")
+            print("")
+        parent_entry["doneCount"] = parent_done
+        parent_entry["totalSubtasks"] = len(subtasks)
+        results.append(parent_entry)
 
-    if total_subtasks == 0:
-        print("小タスクは見つかりませんでした。")
+    if output_json:
+        payload = {
+            "header": header,
+            "parents": results,
+            "totals": {
+                "parents": total_parents,
+                "subtasks": total_subtasks,
+                "done": total_done,
+                "notDone": total_subtasks - total_done,
+            },
+            "aggregates": {
+                "assignees": sorted(list(agg_by_assignee.values()), key=lambda x: (-x["storyPoints"], x["assignee"]))
+            },
+        }
+        print(json.dumps(payload, ensure_ascii=False))
     else:
-        print("合計")
-        print(f"  親タスク数: {total_parents}")
-        print(f"  小タスク数: {total_subtasks}")
-        print(f"  完了: {total_done} / 未完了: {total_subtasks - total_done}")
+        if total_subtasks == 0:
+            print("小タスクは見つかりませんでした。")
+        else:
+            print("合計")
+            print(f"  親タスク数: {total_parents}")
+            print(f"  小タスク数: {total_subtasks}")
+            print(f"  完了: {total_done} / 未完了: {total_subtasks - total_done}")
+            # 担当者別集計の表示
+            if agg_by_assignee:
+                print("\n担当者別 小タスク数 / 完了数 / SP合計")
+                for item in sorted(agg_by_assignee.values(), key=lambda x: (-x["storyPoints"], x["assignee"])):
+                    print(f"  - {item['assignee']}: {item['subtasks']} 件 / 完了 {item['done']} 件 / SP {item['storyPoints']:.1f}")
 
     return 0
 
@@ -391,6 +524,11 @@ def main() -> int:
     project_key = os.getenv("JIRA_PROJECT_KEY")
 
     auth = HTTPBasicAuth(email, api_token)
+
+    # SPフィールド解決
+    sp_field_id = resolve_story_points_field(JIRA_DOMAIN, auth)
+    if not sp_field_id:
+        print("Story Points フィールドが見つかりませんでした。未設定扱い(=1)で出力します。", file=sys.stderr)
 
     # 1) スプリントIDが指定されている場合はそれを優先
     sprint_id_env = os.getenv("JIRA_SPRINT_ID")
@@ -405,7 +543,7 @@ def main() -> int:
         if code_i != 200 or issues_i is None:
             print(err_i, file=sys.stderr)
             return 1
-        return list_and_print_subtasks(JIRA_DOMAIN, auth, issues_i, header)
+        return list_and_print_subtasks(JIRA_DOMAIN, auth, issues_i, header, sp_field_id)
 
     # 2) まずボードを一意に解決
     code_b, board, err_b = resolve_board(JIRA_DOMAIN, auth)
@@ -442,7 +580,7 @@ def main() -> int:
         return 1
 
     header = f"ボード '{board_name}' のアクティブスプリント '{sprint_name}' 内の小タスク一覧"
-    return list_and_print_subtasks(JIRA_DOMAIN, auth, issues_i, header)
+    return list_and_print_subtasks(JIRA_DOMAIN, auth, issues_i, header, sp_field_id)
 
 
 if __name__ == "__main__":
