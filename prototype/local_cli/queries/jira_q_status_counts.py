@@ -103,7 +103,8 @@ def main() -> int:
                 statuses = sorted(tmp)
         # Now estimate per-status counts
         for name in statuses:
-            q = f'{base_jql} AND status="{name.replace("\"", "\\\"")}"'
+            esc = str(name).replace('"', '\\"')
+            q = f'{base_jql} AND status="{esc}"'
             code_c, cnt, _ = jc.approximate_count(q)
             by_status.append({
                 "status": name,

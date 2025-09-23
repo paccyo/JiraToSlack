@@ -64,7 +64,8 @@ def main() -> int:
                 type_names = sorted({(((x.get("fields") or {}).get("issuetype") or {}).get("name")) or "(unknown)" for x in sample})
         # count approximate per type
         for name in type_names:
-            jql = f'{base} AND issuetype = "{name.replace("\"", "\\\"")}"'
+            esc = str(name).replace('"', '\\"')
+            jql = f'{base} AND issuetype = "{esc}"'
             code_c, cnt, _ = jc.approximate_count(jql)
             counts[name] = int(cnt or 0)
         total = sum(counts.values())

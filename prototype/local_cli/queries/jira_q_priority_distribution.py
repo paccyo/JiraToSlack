@@ -57,7 +57,8 @@ def main() -> int:
             if code_s == 200:
                 names = sorted({(((x.get("fields") or {}).get("priority") or {}).get("name")) or "(unknown)" for x in sample})
         for name in names:
-            jql = f'{base} AND priority = "{name.replace("\"", "\\\"")}"'
+            esc = str(name).replace('"', '\\"')
+            jql = f'{base} AND priority = "{esc}"'
             code_c, cnt, _ = jc.approximate_count(jql)
             counts[name] = int(cnt or 0)
         total = sum(counts.values())

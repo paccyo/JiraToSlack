@@ -82,10 +82,6 @@ def api_post(
 def resolve_story_points_field(
     JIRA_DOMAIN: str, auth: HTTPBasicAuth
 ) -> Optional[str]:
-    """
-    ストーリーポイントのフィールドIDを返す。
-    優先順位: 環境変数 > API検出 > customfield_10016（デフォルト）
-    """
     sp_env = os.getenv("JIRA_STORY_POINTS_FIELD")
     if sp_env:
         return sp_env
@@ -109,13 +105,11 @@ def resolve_story_points_field(
 
     chosen: Optional[str] = None
     if isinstance(fields, list):
-        # 1) スキーマから厳密判定
         for f in fields:
             schema = f.get("schema") or {}
             if schema.get("custom") == "com.pyxis.greenhopper.jira:jsw-story-points":
                 chosen = str(f.get("id"))
                 break
-        # 2) 名前のヒューリスティック
         if not chosen:
             candidates: List[Dict[str, Any]] = []
             for f in fields:
@@ -135,14 +129,12 @@ def resolve_story_points_field(
                 candidates.sort(key=priority)
                 chosen = str(candidates[0].get("id"))
 
-        # 3) customfield_10016 が存在するならそれを優先
         if not chosen:
             for f in fields:
                 if str(f.get("id")) == "customfield_10016":
                     chosen = "customfield_10016"
                     break
 
-    # 4) 最終フォールバック
     return chosen or "customfield_10016"
 
 
@@ -150,14 +142,12 @@ def resolve_board(JIRA_DOMAIN: str, auth: HTTPBasicAuth) -> Tuple[int, Optional[
     board_id = os.getenv("JIRA_BOARD_ID")
     project_key = os.getenv("JIRA_PROJECT_KEY")
 
-    # 1) 数値ID指定
     if board_id and board_id.isdigit():
         code, data, err = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/board/{board_id}", auth)
         if code == 200 and data:
             return 200, data, ""
         return code, None, f"ボードID {board_id} の取得に失敗: {err}"
 
-    # 2) 名称指定: プロジェクト配下→全体の順
     if board_id and not board_id.isdigit():
         params = {"maxResults": 50}
         if project_key:
@@ -191,7 +181,6 @@ def resolve_board(JIRA_DOMAIN: str, auth: HTTPBasicAuth) -> Tuple[int, Optional[
             return code_b2, None, f"ボード一覧取得に失敗: {err_b2}"
         return 404, None, f"ボード名 '{board_id}' は見つかりませんでした"
 
-    # 3) 指定なし: プロジェクト配下のScrumボード→全体。候補が複数でも先頭を採用（PoC）。
     params = {"maxResults": 50}
     if project_key:
         params["projectKeyOrId"] = project_key
@@ -199,7 +188,6 @@ def resolve_board(JIRA_DOMAIN: str, auth: HTTPBasicAuth) -> Tuple[int, Optional[
     if code == 200 and data and data.get("values"):
         return 200, data.get("values")[0], ""
 
-    # 全体から
     code2, data2, err2 = api_get(
         f"{JIRA_DOMAIN}/rest/agile/1.0/board", auth, params={"maxResults": 50}
     )
@@ -230,7 +218,6 @@ def resolve_active_sprint(
     sprints = data.get("values", [])
     if not sprints:
         return 404, None, "アクティブなスプリントが見つかりません"
-    # 複数あってもPoCでは先頭を採用
     return 200, sprints[0], ""
 
 
@@ -246,7 +233,6 @@ def search_issues_jql(
     fields = fields or ["summary", "issuetype", "status", "subtasks", "assignee"]
 
     while True:
-        # Prefer GET /search with params; fallback to POST if needed
         params = {
             "jql": jql,
             "fields": ",".join(fields),
@@ -266,10 +252,8 @@ def search_issues_jql(
                 return code, None, f"JQL検索に失敗: {err or err2}"
             data = data2
 
-        # Response can be { issues, total } or other shapes; normalize
         issues = data.get("issues") if isinstance(data, dict) else None
         if issues is None and isinstance(data, dict):
-            # Try alternative keys
             issues = data.get("results") or data.get("data")
         if issues is None:
             return 200, [], ""
@@ -328,7 +312,6 @@ def ensure_subtask_fields(
     JIRA_DOMAIN: str, auth: HTTPBasicAuth, subtask: Dict[str, Any], sp_field_id: Optional[str]
 ) -> Tuple[int, Optional[Dict[str, Any]], str]:
     fields = subtask.get("fields") or {}
-    # 既にsummary/statusがあり、かつSPも揃っていればそのまま返す
     if fields.get("status") and fields.get("summary") and (not sp_field_id or sp_field_id in fields):
         return 200, subtask, ""
 
@@ -345,7 +328,6 @@ def ensure_subtask_fields(
     if code != 200 or not data:
         return code, None, f"サブタスク詳細取得に失敗: {err}"
 
-    # 期待する形に整形
     subtask["fields"] = subtask.get("fields", {}) or {}
     subtask["fields"].update({
         "summary": data.get("fields", {}).get("summary"),
@@ -439,7 +421,6 @@ def list_and_print_subtasks(
             sub_fields = sub_full.get("fields", {})
             sub_summary = sub_fields.get("summary")
             status = sub_fields.get("status")
-            # ストーリーポイント取得（未設定は1）
             sp_value: Optional[float] = None
             if sp_field_id:
                 sp_raw = sub_fields.get(sp_field_id)
@@ -463,7 +444,6 @@ def list_and_print_subtasks(
                 "storyPoints": sp_value,
             })
 
-            # 担当者別集計
             who = assignee or "(未割り当て)"
             cur = agg_by_assignee.get(who) or {"assignee": who, "subtasks": 0, "done": 0, "storyPoints": 0.0}
             cur["subtasks"] += 1
@@ -507,7 +487,6 @@ def list_and_print_subtasks(
             print(f"  親タスク数: {total_parents}")
             print(f"  小タスク数: {total_subtasks}")
             print(f"  完了: {total_done} / 未完了: {total_subtasks - total_done}")
-            # 担当者別集計の表示
             if agg_by_assignee:
                 print("\n担当者別 小タスク数 / 完了数 / SP合計")
                 for item in sorted(agg_by_assignee.values(), key=lambda x: (-x["storyPoints"], x["assignee"])):
@@ -525,12 +504,10 @@ def main() -> int:
 
     auth = HTTPBasicAuth(email, api_token)
 
-    # SPフィールド解決
     sp_field_id = resolve_story_points_field(JIRA_DOMAIN, auth)
     if not sp_field_id:
         print("Story Points フィールドが見つかりませんでした。未設定扱い(=1)で出力します。", file=sys.stderr)
 
-    # 1) スプリントIDが指定されている場合はそれを優先
     sprint_id_env = os.getenv("JIRA_SPRINT_ID")
     if sprint_id_env:
         header = f"スプリント '{sprint_id_env}' 内の小タスク一覧"
@@ -545,7 +522,6 @@ def main() -> int:
             return 1
         return list_and_print_subtasks(JIRA_DOMAIN, auth, issues_i, header, sp_field_id)
 
-    # 2) まずボードを一意に解決
     code_b, board, err_b = resolve_board(JIRA_DOMAIN, auth)
     if code_b != 200 or not board:
         print(err_b, file=sys.stderr)
@@ -555,14 +531,12 @@ def main() -> int:
     board_name = board.get("name")
     print(f"使用ボード: {board_name} (id={board_id})")
 
-    # プロジェクトキー未設定ならボードから推測
     if not project_key:
         inferred = try_infer_project_key_from_board(JIRA_DOMAIN, auth, board)
         if inferred:
             project_key = inferred
             print(f"推測したプロジェクトキー: {project_key}")
 
-    # 3) アクティブスプリントを解決
     code_s, sprint, err_s = resolve_active_sprint(JIRA_DOMAIN, auth, board_id)
     if code_s != 200 or not sprint:
         print(err_s, file=sys.stderr)
@@ -571,7 +545,6 @@ def main() -> int:
     sprint_id = int(sprint.get("id"))
     sprint_name = sprint.get("name")
 
-    # 4) スプリント内の親タスクを取得し、小タスクを列挙
     code_i, issues_i, err_i = agile_list_issues_in_sprint(
         JIRA_DOMAIN, auth, sprint_id, project_key, fields=["summary", "issuetype", "status", "subtasks", "assignee"]
     )

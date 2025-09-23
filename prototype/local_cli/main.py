@@ -267,10 +267,14 @@ def fmt_date(dt_str: Optional[str]) -> Optional[str]:
 
 
 def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    # Allow forced disable to avoid network calls
+    if os.getenv("GEMINI_DISABLE", "").lower() in ("1", "true", "yes"):
+        return None
     if not api_key or not genai:
         return None
     try:
-        genai.configure(api_key=api_key)
+        # Use REST transport to avoid gRPC plugin metadata issues and set a short timeout
+        genai.configure(api_key=api_key, transport="rest")
         model = genai.GenerativeModel("gemini-1.5-flash")
         prompt = (
             "以下のJiraスプリント状況から、3行の要約テキストを日本語で生成してください。\n"
@@ -281,7 +285,7 @@ def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Opt
             "制約: 各行は1文。冗長な繰り返しは避ける。\n"
             f"コンテキスト(JSON): {json.dumps(context, ensure_ascii=False)}\n"
         )
-        out = model.generate_content(prompt)
+        out = model.generate_content(prompt, request_options={"timeout": 10})
         text = (getattr(out, "text", None) or "").strip()
         lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
         if len(lines) >= 3:
@@ -978,7 +982,7 @@ def main() -> int:
             except Exception:
                 sprints_n = 1
     base_dir = Path(os.getenv("OUTPUT_DIR") or Path(__file__).resolve().parent)
-    subtasks_script = str(base_dir / "jira_list_sprint_subtasks.py")
+    subtasks_script = str(base_dir / "queries" / "jira_list_sprint_subtasks.py")
     data = get_json_from_script(subtasks_script)
     out_path = str(base_dir / "sprint_overview.png")
     axis_mode = os.getenv("AXIS_MODE", "percent").lower()  # 'percent' or 'count'
