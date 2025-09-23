@@ -79,86 +79,83 @@ def api_post(
         return resp.status_code, None, resp.text
 
 
-def resolve_board(jira_base_url: str, auth: HTTPBasicAuth) -> Tuple[int, Optional[Dict[str, Any]], str]:
+def resolve_board(JIRA_DOMAIN: str, auth: HTTPBasicAuth) -> Tuple[int, Optional[Dict[str, Any]], str]:
     board_id = os.getenv("JIRA_BOARD_ID")
-    if board_id:
-        if board_id.isdigit():
-            code, data, err = api_get(f"{jira_base_url}/rest/agile/1.0/board/{board_id}", auth)
-            if code == 200 and data:
-                return 200, data, ""
-            return code, None, f"ボードID {board_id} の取得に失敗: {err}"
-        else:
-            # 名前で解決: プロジェクト配下→全体の順で探索
-            project_key = os.getenv("JIRA_PROJECT_KEY")
-            # まずプロジェクト配下
-            params = {"type": "scrum", "maxResults": 50}
-            if project_key:
-                params["projectKeyOrId"] = project_key
-            code_b, data_b, err_b = api_get(f"{jira_base_url}/rest/agile/1.0/board", auth, params=params)
-            boards = []
-            if code_b == 200 and data_b:
-                boards.extend(data_b.get("values", []))
-            else:
-                return code_b, None, f"ボード一覧取得に失敗: {err_b}"
-
-            def find_by_name(items, name):
-                exact = [x for x in items if str(x.get("name", "")).lower() == name.lower()]
-                if exact:
-                    return exact
-                return [x for x in items if name.lower() in str(x.get("name", "")).lower()]
-
-            matches = find_by_name(boards, board_id)
-            if not matches:
-                # 全体で再取得
-                code_b2, data_b2, err_b2 = api_get(
-                    f"{jira_base_url}/rest/agile/1.0/board", auth, params={"type": "scrum", "maxResults": 50}
-                )
-                if code_b2 == 200 and data_b2:
-                    boards = data_b2.get("values", [])
-                    matches = find_by_name(boards, board_id)
-                else:
-                    return code_b2, None, f"ボード一覧取得に失敗: {err_b2}"
-
-            if not matches:
-                return 404, None, f"ボード名 '{board_id}' は見つかりませんでした"
-            if len(matches) > 1:
-                cand = ", ".join([f"{b.get('name')} (id={b.get('id')})" for b in matches[:10]])
-                return 409, None, f"ボード名 '{board_id}' の候補が複数見つかりました: {cand}"
-            return 200, matches[0], ""
-
     project_key = os.getenv("JIRA_PROJECT_KEY")
-    if not project_key:
-        return 400, None, "JIRA_BOARD_ID か JIRA_PROJECT_KEY のいずれかを設定してください"
 
-    params = {"projectKeyOrId": project_key, "type": "scrum", "maxResults": 50}
-    code, data, err = api_get(f"{jira_base_url}/rest/agile/1.0/board", auth, params=params)
-    if code != 200 or not data:
-        return code, None, f"ボード一覧取得に失敗: {err}"
+    # 1) 数値ID指定
+    if board_id and board_id.isdigit():
+        code, data, err = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/board/{board_id}", auth)
+        if code == 200 and data:
+            return 200, data, ""
+        return code, None, f"ボードID {board_id} の取得に失敗: {err}"
 
-    boards = data.get("values", [])
-    if not boards:
-        return 404, None, f"プロジェクト {project_key} に紐づくScrumボードが見つかりません"
-    if len(boards) > 1:
-        msg = "複数のボードが見つかりました。JIRA_BOARD_ID を設定してください:\n" + "\n".join(
-            [f"  - {b.get('name')} (id={b.get('id')})" for b in boards]
+    # 2) 名称指定: プロジェクト配下→全体の順
+    if board_id and not board_id.isdigit():
+        params = {"maxResults": 50}
+        if project_key:
+            params["projectKeyOrId"] = project_key
+        code_b, data_b, err_b = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/board", auth, params=params)
+        items: List[Dict[str, Any]] = []
+        if code_b == 200 and data_b:
+            items.extend(data_b.get("values", []))
+        else:
+            return code_b, None, f"ボード一覧取得に失敗: {err_b}"
+
+        exact = [x for x in items if str(x.get("name", "")).lower() == board_id.lower()]
+        if exact:
+            return 200, exact[0], ""
+        partial = [x for x in items if board_id.lower() in str(x.get("name", "")).lower()]
+        if partial:
+            return 200, partial[0], ""
+
+        code_b2, data_b2, err_b2 = api_get(
+            f"{JIRA_DOMAIN}/rest/agile/1.0/board", auth, params={"maxResults": 50}
         )
-        return 409, None, msg
-    return 200, boards[0], ""
+        if code_b2 == 200 and data_b2:
+            items2 = data_b2.get("values", [])
+            exact = [x for x in items2 if str(x.get("name", "")).lower() == board_id.lower()]
+            if exact:
+                return 200, exact[0], ""
+            partial = [x for x in items2 if board_id.lower() in str(x.get("name", "")).lower()]
+            if partial:
+                return 200, partial[0], ""
+        else:
+            return code_b2, None, f"ボード一覧取得に失敗: {err_b2}"
+        return 404, None, f"ボード名 '{board_id}' は見つかりませんでした"
+
+    # 3) 指定なし: プロジェクト配下のScrumボード→全体。候補が複数でも先頭を採用（PoC）。
+    params = {"maxResults": 50}
+    if project_key:
+        params["projectKeyOrId"] = project_key
+    code, data, err = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/board", auth, params=params)
+    if code == 200 and data and data.get("values"):
+        return 200, data.get("values")[0], ""
+
+    # 全体から
+    code2, data2, err2 = api_get(
+        f"{JIRA_DOMAIN}/rest/agile/1.0/board", auth, params={"maxResults": 50}
+    )
+    if code2 == 200 and data2 and data2.get("values"):
+        return 200, data2.get("values")[0], ""
+    if code2 != 200:
+        return code2, None, f"ボード一覧取得に失敗: {err2}"
+    return 404, None, "ボードが見つかりませんでした"
 
 
 def resolve_active_sprint(
-    jira_base_url: str, auth: HTTPBasicAuth, board_id: int
+    JIRA_DOMAIN: str, auth: HTTPBasicAuth, board_id: int
 ) -> Tuple[int, Optional[Dict[str, Any]], str]:
     sprint_id_env = os.getenv("JIRA_SPRINT_ID")
     if sprint_id_env:
-        code, data, err = api_get(f"{jira_base_url}/rest/agile/1.0/sprint/{sprint_id_env}", auth)
+        code, data, err = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/sprint/{sprint_id_env}", auth)
         if code == 200 and data:
             return 200, data, ""
         return code, None, f"スプリントID {sprint_id_env} の取得に失敗: {err}"
 
     params = {"state": "active", "maxResults": 50}
     code, data, err = api_get(
-        f"{jira_base_url}/rest/agile/1.0/board/{board_id}/sprint", auth, params=params
+        f"{JIRA_DOMAIN}/rest/agile/1.0/board/{board_id}/sprint", auth, params=params
     )
     if code != 200 or not data:
         return code, None, f"アクティブスプリントの取得に失敗: {err}"
@@ -175,7 +172,7 @@ def resolve_active_sprint(
 
 
 def search_issues_jql(
-    jira_base_url: str,
+    JIRA_DOMAIN: str,
     auth: HTTPBasicAuth,
     jql: str,
     fields: Optional[List[str]] = None,
@@ -193,7 +190,7 @@ def search_issues_jql(
             "startAt": start_at,
             "maxResults": batch_size,
         }
-        code, data, err = api_get(f"{jira_base_url}/rest/api/3/search", auth, params=params)
+        code, data, err = api_get(f"{JIRA_DOMAIN}/rest/api/3/search", auth, params=params)
         if code != 200 or not data:
             body = {
                 "jql": jql,
@@ -201,7 +198,7 @@ def search_issues_jql(
                 "startAt": start_at,
                 "maxResults": batch_size,
             }
-            code2, data2, err2 = api_post(f"{jira_base_url}/rest/api/3/search", auth, body)
+            code2, data2, err2 = api_post(f"{JIRA_DOMAIN}/rest/api/3/search", auth, body)
             if code2 != 200 or not data2:
                 return code, None, f"JQL検索に失敗: {err or err2}"
             data = data2
@@ -225,7 +222,7 @@ def search_issues_jql(
 
 
 def agile_list_issues_in_sprint(
-    jira_base_url: str,
+    JIRA_DOMAIN: str,
     auth: HTTPBasicAuth,
     sprint_id: int,
     project_key: Optional[str],
@@ -248,7 +245,7 @@ def agile_list_issues_in_sprint(
             "maxResults": batch_size,
         }
         code, data, err = api_get(
-            f"{jira_base_url}/rest/agile/1.0/sprint/{sprint_id}/issue", auth, params=params
+            f"{JIRA_DOMAIN}/rest/agile/1.0/sprint/{sprint_id}/issue", auth, params=params
         )
         if code != 200 or not data:
             return code, None, f"スプリント {sprint_id} の課題取得に失敗: {err}"
@@ -265,7 +262,7 @@ def agile_list_issues_in_sprint(
 
 
 def ensure_subtask_fields(
-    jira_base_url: str, auth: HTTPBasicAuth, subtask: Dict[str, Any]
+    JIRA_DOMAIN: str, auth: HTTPBasicAuth, subtask: Dict[str, Any]
 ) -> Tuple[int, Optional[Dict[str, Any]], str]:
     fields = subtask.get("fields")
     if fields and fields.get("status") and fields.get("summary"):
@@ -276,7 +273,7 @@ def ensure_subtask_fields(
         return 400, None, "サブタスクのID/Keyが取得できませんでした"
 
     code, data, err = api_get(
-        f"{jira_base_url}/rest/api/3/issue/{sub_id}", auth, params={"fields": "summary,status"}
+        f"{JIRA_DOMAIN}/rest/api/3/issue/{sub_id}", auth, params={"fields": "summary,status"}
     )
     if code != 200 or not data:
         return code, None, f"サブタスク詳細取得に失敗: {err}"
@@ -302,8 +299,29 @@ def is_done(status_field: Optional[Dict[str, Any]]) -> Optional[bool]:
     return None
 
 
+def try_infer_project_key_from_board(
+    JIRA_DOMAIN: str, auth: HTTPBasicAuth, board: Dict[str, Any]
+) -> Optional[str]:
+    loc = (board or {}).get("location") or {}
+    pkey = loc.get("projectKey")
+    if pkey:
+        return str(pkey)
+    bid = board.get("id")
+    try:
+        bid_int = int(bid)
+    except Exception:
+        return None
+    code, detail, _ = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/board/{bid_int}", auth)
+    if code == 200 and detail:
+        loc = (detail or {}).get("location") or {}
+        pkey = loc.get("projectKey")
+        if pkey:
+            return str(pkey)
+    return None
+
+
 def list_and_print_subtasks(
-    jira_base_url: str,
+    JIRA_DOMAIN: str,
     auth: HTTPBasicAuth,
     issues_source: List[Dict[str, Any]] | None,
     header: str,
@@ -331,7 +349,7 @@ def list_and_print_subtasks(
 
         parent_done = 0
         for sub in subtasks:
-            code_s, sub_full, err_s = ensure_subtask_fields(jira_base_url, auth, sub)
+            code_s, sub_full, err_s = ensure_subtask_fields(JIRA_DOMAIN, auth, sub)
             if code_s != 200 or not sub_full:
                 print(f"  - {sub.get('key') or sub.get('id')} 取得失敗: {err_s}")
                 continue
@@ -367,7 +385,7 @@ def list_and_print_subtasks(
 
 def main() -> int:
     maybe_load_dotenv()
-    jira_base_url = load_env("JIRA_BASE_URL").rstrip("/")
+    JIRA_DOMAIN = load_env("JIRA_DOMAIN").rstrip("/")
     email = load_env("JIRA_EMAIL")
     api_token = load_env("JIRA_API_TOKEN")
     project_key = os.getenv("JIRA_PROJECT_KEY")
@@ -378,96 +396,53 @@ def main() -> int:
     sprint_id_env = os.getenv("JIRA_SPRINT_ID")
     if sprint_id_env:
         header = f"スプリント '{sprint_id_env}' 内の小タスク一覧"
-        # 名前が取れれば差し替え
-        code, sprint_info, _ = api_get(f"{jira_base_url}/rest/agile/1.0/sprint/{sprint_id_env}", auth)
+        code, sprint_info, _ = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/sprint/{sprint_id_env}", auth)
         if code == 200 and sprint_info:
             header = f"スプリント '{sprint_info.get('name')}' 内の小タスク一覧"
         code_i, issues_i, err_i = agile_list_issues_in_sprint(
-            jira_base_url, auth, int(sprint_id_env), project_key, fields=["summary", "issuetype", "status", "subtasks", "assignee"]
+            JIRA_DOMAIN, auth, int(sprint_id_env), project_key, fields=["summary", "issuetype", "status", "subtasks", "assignee"]
         )
         if code_i != 200 or issues_i is None:
             print(err_i, file=sys.stderr)
             return 1
-        return list_and_print_subtasks(jira_base_url, auth, issues_i, header)
+        return list_and_print_subtasks(JIRA_DOMAIN, auth, issues_i, header)
 
-    # 2) ボードとアクティブスプリントを解決
-    code, board, err = resolve_board(jira_base_url, auth)
-    if code == 200 and board:
-        board_id = int(board.get("id"))
-        board_name = board.get("name")
+    # 2) まずボードを一意に解決
+    code_b, board, err_b = resolve_board(JIRA_DOMAIN, auth)
+    if code_b != 200 or not board:
+        print(err_b, file=sys.stderr)
+        return 1
 
-        code, sprint, err = resolve_active_sprint(jira_base_url, auth, board_id)
-        if code == 200 and sprint:
-            sprint_id = int(sprint.get("id"))
-            sprint_name = sprint.get("name")
+    board_id = int(board.get("id"))
+    board_name = board.get("name")
+    print(f"使用ボード: {board_name} (id={board_id})")
 
-            code_i, issues_i, err_i = agile_list_issues_in_sprint(
-                jira_base_url, auth, sprint_id, project_key, fields=["summary", "issuetype", "status", "subtasks", "assignee"]
-            )
-            if code_i != 200 or issues_i is None:
-                print(err_i, file=sys.stderr)
-                return 1
-            header = f"ボード '{board_name}' のアクティブスプリント '{sprint_name}' 内の小タスク一覧"
-            return list_and_print_subtasks(jira_base_url, auth, issues_i, header)
+    # プロジェクトキー未設定ならボードから推測
+    if not project_key:
+        inferred = try_infer_project_key_from_board(JIRA_DOMAIN, auth, board)
+        if inferred:
+            project_key = inferred
+            print(f"推測したプロジェクトキー: {project_key}")
 
-        # スプリントが取れない場合は openSprints() にフォールバック
-        warn = f"アクティブスプリント解決に失敗: {err}。openSprints() で代替します。"
-        print(warn, file=sys.stderr)
-    else:
-        # ボードが取れない場合も openSprints() にフォールバック
-        warn = f"ボード解決に失敗: {err}。openSprints() で代替します。"
-        print(warn, file=sys.stderr)
+    # 3) アクティブスプリントを解決
+    code_s, sprint, err_s = resolve_active_sprint(JIRA_DOMAIN, auth, board_id)
+    if code_s != 200 or not sprint:
+        print(err_s, file=sys.stderr)
+        return 1
 
-    # 3) 全スクラムボードを走査し、アクティブスプリントを集計して取得
-    boards: List[Dict[str, Any]] = []
-    code_b, data_b, err_b = api_get(f"{jira_base_url}/rest/agile/1.0/board", auth, params={"type": "scrum", "maxResults": 50})
-    if code_b == 200 and data_b:
-        boards.extend(data_b.get("values", []))
-        # ページング対応（必要に応じて）
-        start_at = data_b.get("startAt", 0)
-        max_results = data_b.get("maxResults", 50)
-        total = data_b.get("total", len(boards))
-        while start_at + max_results < total:
-            start_at += max_results
-            code_b2, data_b2, err_b2 = api_get(
-                f"{jira_base_url}/rest/agile/1.0/board", auth, params={"type": "scrum", "maxResults": 50, "startAt": start_at}
-            )
-            if code_b2 == 200 and data_b2:
-                boards.extend(data_b2.get("values", []))
-            else:
-                print(f"ボード一覧のページング取得に一部失敗: {err_b2}", file=sys.stderr)
-                break
-    else:
-        print(f"ボード一覧取得に失敗: {err_b}", file=sys.stderr)
+    sprint_id = int(sprint.get("id"))
+    sprint_name = sprint.get("name")
 
-    sprint_ids: List[int] = []
-    for b in boards:
-        bid = b.get("id")
-        if bid is None:
-            continue
-        code_s, data_s, err_s = api_get(
-            f"{jira_base_url}/rest/agile/1.0/board/{bid}/sprint", auth, params={"state": "active", "maxResults": 50}
-        )
-        if code_s == 200 and data_s:
-            for s in data_s.get("values", []) or []:
-                sid = s.get("id")
-                if isinstance(sid, int) and sid not in sprint_ids:
-                    sprint_ids.append(sid)
-        else:
-            print(f"ボード {bid} のスプリント取得に失敗: {err_s}", file=sys.stderr)
+    # 4) スプリント内の親タスクを取得し、小タスクを列挙
+    code_i, issues_i, err_i = agile_list_issues_in_sprint(
+        JIRA_DOMAIN, auth, sprint_id, project_key, fields=["summary", "issuetype", "status", "subtasks", "assignee"]
+    )
+    if code_i != 200 or issues_i is None:
+        print(err_i, file=sys.stderr)
+        return 1
 
-    combined_issues: List[Dict[str, Any]] = []
-    for sid in sprint_ids:
-        code_i, issues_i, err_i = agile_list_issues_in_sprint(
-            jira_base_url, auth, sid, project_key, fields=["summary", "issuetype", "status", "subtasks", "assignee"]
-        )
-        if code_i == 200 and issues_i:
-            combined_issues.extend(issues_i)
-        else:
-            print(f"スプリント {sid} の課題取得に失敗: {err_i}", file=sys.stderr)
-
-    header = f"プロジェクト '{project_key or '-'}' のアクティブスプリント(全ボード)内の小タスク一覧"
-    return list_and_print_subtasks(jira_base_url, auth, combined_issues, header)
+    header = f"ボード '{board_name}' のアクティブスプリント '{sprint_name}' 内の小タスク一覧"
+    return list_and_print_subtasks(JIRA_DOMAIN, auth, issues_i, header)
 
 
 if __name__ == "__main__":

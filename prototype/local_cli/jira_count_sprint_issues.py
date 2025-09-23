@@ -2,7 +2,7 @@ import os
 import sys
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, List
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -48,59 +48,100 @@ def api_get(url: str, auth: HTTPBasicAuth, params: Optional[Dict[str, Any]] = No
         return resp.status_code, None, resp.text
 
 
-def resolve_board(jira_base_url: str, auth: HTTPBasicAuth) -> Tuple[int, Optional[Dict[str, Any]], str]:
-    board_id = os.getenv("JIRA_BOARD_ID")
-    if board_id:
-        code, data, err = api_get(f"{jira_base_url}/rest/agile/1.0/board/{board_id}", auth)
+def list_scrum_boards(JIRA_DOMAIN: str, auth: HTTPBasicAuth, project_key: Optional[str]) -> Tuple[int, List[Dict[str, Any]], str]:
+    boards: List[Dict[str, Any]] = []
+    params: Dict[str, Any] = {"type": "scrum", "maxResults": 50}
+    if project_key:
+        params["projectKeyOrId"] = project_key
+    code, data, err = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/board", auth, params=params)
+    if code != 200 or not data:
+        return code, [], f"ボード一覧取得に失敗: {err}"
+    boards.extend(data.get("values", []))
+    start_at = data.get("startAt", 0)
+    max_results = data.get("maxResults", 50)
+    total = data.get("total", len(boards))
+    while start_at + max_results < total:
+        start_at += max_results
+        params_page = dict(params)
+        params_page["startAt"] = start_at
+        code, data, err = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/board", auth, params=params_page)
+        if code != 200 or not data:
+            return code, boards, f"ボード一覧のページング取得に失敗: {err}"
+        boards.extend(data.get("values", []))
+    return 200, boards, ""
+
+
+def resolve_board(JIRA_DOMAIN: str, auth: HTTPBasicAuth) -> Tuple[int, Optional[Dict[str, Any]], str]:
+    board_id_env = os.getenv("JIRA_BOARD_ID")
+    project_key = os.getenv("JIRA_PROJECT_KEY")
+
+    # 1) 指定が数値IDの場合
+    if board_id_env and board_id_env.isdigit():
+        code, data, err = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/board/{board_id_env}", auth)
         if code == 200 and data:
             return 200, data, ""
-        return code, None, f"ボードID {board_id} の取得に失敗: {err}"
+        return code, None, f"ボードID {board_id_env} の取得に失敗: {err}"
 
-    project_key = os.getenv("JIRA_PROJECT_KEY")
-    if not project_key:
-        return 400, None, "JIRA_BOARD_ID か JIRA_PROJECT_KEY のいずれかを設定してください"
+    # 2) 指定が名称の場合
+    if board_id_env and not board_id_env.isdigit():
+        code, boards, err = list_scrum_boards(JIRA_DOMAIN, auth, project_key)
+        if code != 200:
+            return code, None, err
+        # exact -> partial
+        exact = [b for b in boards if str(b.get("name", "")).lower() == board_id_env.lower()]
+        if exact:
+            return 200, exact[0], ""
+        partial = [b for b in boards if board_id_env.lower() in str(b.get("name", "")).lower()]
+        if partial:
+            return 200, partial[0], ""
+        # 全体から再探索
+        code2, boards2, err2 = list_scrum_boards(JIRA_DOMAIN, auth, None)
+        if code2 != 200:
+            return code2, None, err2
+        exact = [b for b in boards2 if str(b.get("name", "")).lower() == board_id_env.lower()]
+        if exact:
+            return 200, exact[0], ""
+        partial = [b for b in boards2 if board_id_env.lower() in str(b.get("name", "")).lower()]
+        if partial:
+            return 200, partial[0], ""
+        return 404, None, f"ボード名 '{board_id_env}' は見つかりませんでした"
 
-    params = {"projectKeyOrId": project_key, "type": "scrum", "maxResults": 50}
-    code, data, err = api_get(f"{jira_base_url}/rest/agile/1.0/board", auth, params=params)
-    if code != 200 or not data:
-        return code, None, f"ボード一覧取得に失敗: {err}"
+    # 3) 指定がない場合: プロジェクト配下のボードを優先し、単一なら採用。複数なら先頭を採用。
+    code, boards, err = list_scrum_boards(JIRA_DOMAIN, auth, project_key)
+    if code != 200:
+        return code, None, err
+    if boards:
+        return 200, boards[0], ""
+    # 4) 全体からの候補
+    code2, boards2, err2 = list_scrum_boards(JIRA_DOMAIN, auth, None)
+    if code2 != 200:
+        return code2, None, err2
+    if boards2:
+        return 200, boards2[0], ""
+    return 404, None, "Scrumボードが見つかりませんでした"
 
-    boards = data.get("values", [])
-    if not boards:
-        return 404, None, f"プロジェクト {project_key} に紐づくScrumボードが見つかりません"
-    if len(boards) > 1:
-        msg = "複数のボードが見つかりました。JIRA_BOARD_ID を設定してください:\n" + "\n".join(
-            [f"  - {b.get('name')} (id={b.get('id')})" for b in boards]
-        )
-        return 409, None, msg
-    return 200, boards[0], ""
 
-
-def resolve_active_sprint(jira_base_url: str, auth: HTTPBasicAuth, board_id: int) -> Tuple[int, Optional[Dict[str, Any]], str]:
+def resolve_active_sprint(JIRA_DOMAIN: str, auth: HTTPBasicAuth, board_id: int) -> Tuple[int, Optional[Dict[str, Any]], str]:
     sprint_id_env = os.getenv("JIRA_SPRINT_ID")
     if sprint_id_env:
-        code, data, err = api_get(f"{jira_base_url}/rest/agile/1.0/sprint/{sprint_id_env}", auth)
+        code, data, err = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/sprint/{sprint_id_env}", auth)
         if code == 200 and data:
             return 200, data, ""
         return code, None, f"スプリントID {sprint_id_env} の取得に失敗: {err}"
 
     params = {"state": "active", "maxResults": 50}
-    code, data, err = api_get(f"{jira_base_url}/rest/agile/1.0/board/{board_id}/sprint", auth, params=params)
+    code, data, err = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/board/{board_id}/sprint", auth, params=params)
     if code != 200 or not data:
         return code, None, f"アクティブスプリントの取得に失敗: {err}"
 
     sprints = data.get("values", [])
     if not sprints:
         return 404, None, "アクティブなスプリントが見つかりません"
-    if len(sprints) > 1:
-        msg = "複数のアクティブスプリントが見つかりました。JIRA_SPRINT_ID を設定してください:\n" + "\n".join(
-            [f"  - {s.get('name')} (id={s.get('id')})" for s in sprints]
-        )
-        return 409, None, msg
+    # 複数あっても先頭を採用（PoCの自動化方針）
     return 200, sprints[0], ""
 
 
-def count_issues_in_sprint(jira_base_url: str, auth: HTTPBasicAuth, sprint_id: int, project_key: Optional[str]) -> Tuple[int, Optional[int], str]:
+def count_issues_in_sprint(JIRA_DOMAIN: str, auth: HTTPBasicAuth, sprint_id: int, project_key: Optional[str]) -> Tuple[int, Optional[int], str]:
     jql = f"sprint={sprint_id}"
     if project_key:
         jql = f"project={project_key} AND {jql}"
@@ -108,7 +149,7 @@ def count_issues_in_sprint(jira_base_url: str, auth: HTTPBasicAuth, sprint_id: i
     # 件数取得専用エンドポイント: POST /rest/api/3/search/approximate-count
     try:
         resp = requests.post(
-            f"{jira_base_url}/rest/api/3/search/approximate-count",
+            f"{JIRA_DOMAIN}/rest/api/3/search/approximate-count",
             json={"jql": jql},
             auth=auth,
             headers={"Accept": "application/json"},
@@ -130,7 +171,7 @@ def count_issues_in_sprint(jira_base_url: str, auth: HTTPBasicAuth, sprint_id: i
     return resp.status_code, None, f"POST(count) {resp.status_code} {resp.text}"
 
 
-def count_issues_in_open_sprints(jira_base_url: str, auth: HTTPBasicAuth, project_key: Optional[str]) -> Tuple[int, Optional[int], str]:
+def count_issues_in_open_sprints(JIRA_DOMAIN: str, auth: HTTPBasicAuth, project_key: Optional[str]) -> Tuple[int, Optional[int], str]:
     # プロジェクトに紐づく全アクティブスプリントの課題数を概算で取得
     if project_key:
         jql = f"project={project_key} AND sprint in openSprints()"
@@ -139,7 +180,7 @@ def count_issues_in_open_sprints(jira_base_url: str, auth: HTTPBasicAuth, projec
 
     try:
         resp = requests.post(
-            f"{jira_base_url}/rest/api/3/search/approximate-count",
+            f"{JIRA_DOMAIN}/rest/api/3/search/approximate-count",
             json={"jql": jql},
             auth=auth,
             headers={"Accept": "application/json"},
@@ -163,17 +204,17 @@ def count_issues_in_open_sprints(jira_base_url: str, auth: HTTPBasicAuth, projec
 
 def main() -> int:
     maybe_load_dotenv()
-    jira_base_url = load_env("JIRA_BASE_URL").rstrip("/")
+    JIRA_DOMAIN = load_env("JIRA_DOMAIN").rstrip("/")
     email = load_env("JIRA_EMAIL")
     api_token = load_env("JIRA_API_TOKEN")
     project_key = os.getenv("JIRA_PROJECT_KEY")
 
     auth = HTTPBasicAuth(email, api_token)
 
-    code, board, err = resolve_board(jira_base_url, auth)
+    code, board, err = resolve_board(JIRA_DOMAIN, auth)
     if code != 200 or not board:
         # フォールバック: ボードがない/見つからない場合は openSprints() で件数だけ返す
-        code2, total2, err2 = count_issues_in_open_sprints(jira_base_url, auth, project_key)
+        code2, total2, err2 = count_issues_in_open_sprints(JIRA_DOMAIN, auth, project_key)
         if code2 == 200 and total2 is not None:
             print(f"プロジェクト '{project_key or '-'}' のアクティブスプリント(全ボード)のタスク総数: {total2}")
             return 0
@@ -183,10 +224,10 @@ def main() -> int:
     board_id = int(board.get("id"))
     board_name = board.get("name")
 
-    code, sprint, err = resolve_active_sprint(jira_base_url, auth, board_id)
+    code, sprint, err = resolve_active_sprint(JIRA_DOMAIN, auth, board_id)
     if code != 200 or not sprint:
         # フォールバック: アクティブスプリントがない場合
-        code2, total2, err2 = count_issues_in_open_sprints(jira_base_url, auth, project_key)
+        code2, total2, err2 = count_issues_in_open_sprints(JIRA_DOMAIN, auth, project_key)
         if code2 == 200 and total2 is not None:
             print(f"プロジェクト '{project_key or '-'}' のアクティブスプリント(全ボード)のタスク総数: {total2}")
             return 0
@@ -196,7 +237,14 @@ def main() -> int:
     sprint_id = int(sprint.get("id"))
     sprint_name = sprint.get("name")
 
-    code, total, err = count_issues_in_sprint(jira_base_url, auth, sprint_id, project_key)
+    # ボードからプロジェクトキー推測
+    if not project_key:
+        loc = (board or {}).get("location") or {}
+        pkey = loc.get("projectKey")
+        if pkey:
+            project_key = str(pkey)
+
+    code, total, err = count_issues_in_sprint(JIRA_DOMAIN, auth, sprint_id, project_key)
     if code != 200 or total is None:
         print(err, file=sys.stderr)
         return 1
