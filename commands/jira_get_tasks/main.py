@@ -1,5 +1,8 @@
-from commands.jira_get_tasks.prompts import get_system_prompt_generate_jql, JQLQuerySchema
-from commands.jira_get_tasks.request_jql import RequestJqlRepository
+from prompts import get_system_prompt_generate_jql, JQLQuerySchema
+from request_jql import RequestJqlRepository
+
+# from commands.jira_get_tasks.prompts import get_system_prompt_generate_jql, JQLQuerySchema
+# from commands.jira_get_tasks.request_jql import RequestJqlRepository
 
 import os
 import json
@@ -37,7 +40,7 @@ class CommandJiraGetTasksRepository:
             clean_json_str = re.search(r"\{.*\}", responce.text, re.DOTALL).group(0)
             
             gemini_result = json.loads(clean_json_str)
-
+            print(f"gemini result: \n{gemini_result}")
             # return responce_result
             try:
                 # JQLリクエスト
@@ -109,7 +112,7 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
 
     load_dotenv()
-
+    query = "今日の13:00から14:00の間に完了したタスク"
     repository = CommandJiraGetTasksRepository()
-
-    print(repository.execute(body={"text":"今日が期限のタスク"}))
+    print(f"resuest query:{query}")
+    print(repository.execute(body={"text":query}))

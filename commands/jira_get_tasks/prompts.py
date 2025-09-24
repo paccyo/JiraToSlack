@@ -53,11 +53,15 @@ def get_system_prompt_generate_jql() -> str:
     タスクのステータスに対して特に指定のない場合、以下のようにします。
     {"operator": "in", "value": ["To Do", IN_progress]}
 
-    期限 (duedate) / 作成日 (created):
+    期限 (duedate) / 作成日 (created) / 完了日 (completed):
     「今日」: {"operator": "<=", "value": "endOfDay()"}
     「今週」: {"operator": "<=", "value": "endOfWeek()"}
+    「今月」: {"operator": "<=", "value": "endOfMonth()"}
     「期限切れ」: {"operator": "<", "value": "now()"}
     「今月作成」: {"operator": ">=", "value": "startOfMonth()"}
+    「今日 12:00から14:00」: {"operator": "between", "value": ["startOfDay(\"12:00\")", "startOfDay(\"14:00\")"]}
+    「今日 12:00から」: {"operator": ">=", "value": "startOfDay(\"12:00\")"}
+    「今日の14:00まで」: {"operator": "<=", "value": "startOfDay(\"14:00\")"}
 
     優先度 (priority):
     「高い」「重要」: {"operator": ">=", "value": "High"}
@@ -71,6 +75,29 @@ def get_system_prompt_generate_jql() -> str:
 
     キーワード (text):
     「"〇〇"に関する」「"〇〇"を含む」: "〇〇"
+
+    例1
+    ユーザー指示: 「今日12:00から14:00の間に完了したタスク」
+    あなたの出力:
+    ```json
+    {
+    "project": null,
+    "reporter": null,
+    "assignee": null,
+    "issuetype": "Task",
+    "status": {
+        "operator": "in",
+        "value": ["完了"]
+    },
+    "priority": null,
+    "text": null,
+    "duedate": null,
+    "created": null,
+    "completed": {
+        "operator": "between",
+        "value": ["startOfDay(\"12:00\")", "startOfDay(\"14:00\")"]
+    }
+    }
 """
 
 class Condition(BaseModel):
@@ -87,4 +114,5 @@ class JQLQuerySchema(BaseModel):
     text: Optional[str] = None
     duedate: Optional[Condition] = None
     created: Optional[Condition] = None
+    compreated: Optional[Condition] = None
 

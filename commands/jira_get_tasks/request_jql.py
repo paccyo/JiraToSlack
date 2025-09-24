@@ -23,7 +23,7 @@ class RequestJqlRepository:
 
 
     def execute(self, query):
-
+        print(f"request jql query: \n{query}")
         try:
             # JQLを実行して課題を検索
             # maxResults=False を指定すると、件数上限なしで全件取得します
