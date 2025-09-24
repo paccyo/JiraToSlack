@@ -23,10 +23,12 @@ def maybe_load_dotenv() -> None:
         return
 
     script_dir = Path(__file__).resolve().parent
+    # Prefer the local_cli/.env over workspace root
     candidates = [
-        script_dir / ".env",
-        Path.cwd() / ".env",
-        Path(__file__).resolve().parents[2] / ".env",
+        script_dir.parent / ".env",  # c:/.../prototype/local_cli/.env
+        script_dir / ".env",         # c:/.../prototype/local_cli/queries/.env (fallback)
+        Path.cwd() / ".env",          # current working dir
+        Path(__file__).resolve().parents[2] / ".env",  # repo root
     ]
     for p in candidates:
         if p.exists():

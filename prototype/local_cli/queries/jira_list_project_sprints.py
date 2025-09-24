@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+from pathlib import Path
 from typing import Any, Dict, List
 
 import requests
@@ -15,7 +16,25 @@ def required_env(key: str) -> str:
     return v
 
 
+def maybe_load_dotenv() -> None:
+    try:
+        from dotenv import load_dotenv  # type: ignore
+    except Exception:
+        return
+    script_dir = Path(__file__).resolve().parent
+    candidates = [
+        script_dir.parent / ".env",  # prototype/local_cli/.env
+        script_dir / ".env",         # queries/.env (fallback)
+        Path.cwd() / ".env",
+        Path(__file__).resolve().parents[2] / ".env",
+    ]
+    for p in candidates:
+        if p.exists():
+            load_dotenv(p, override=False)
+
+
 def main() -> int:
+    maybe_load_dotenv()
     domain = required_env("JIRA_DOMAIN").rstrip("/")
     email = required_env("JIRA_EMAIL")
     token = required_env("JIRA_API_TOKEN")

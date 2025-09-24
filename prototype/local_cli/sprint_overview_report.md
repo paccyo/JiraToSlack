@@ -1,17 +1,44 @@
-## 要約 | 2025-09-24 08:28
+## 要約 | 2025-09-24 13:38
 What: SCRUM スプリント 1 (2025-09-17T08:53:35.977Z—2025-09-24T08:53:00.000Z) — 0 tasks, Done 0 (0%). (data: sprint_total=0, sprint_done=0)
-So what: 目標80%未達
+So what: 目標80%未達、レビュー滞留 (data: time_in_status[Review].avg=0.2d)
 Next: 高優先度未完了0件の即時割当、レビュー担当の増員検討
+
+## AI要約 (Gemini)
+
+1. エグゼクティブサマリー
+
+- 評価：要警戒。主要理由：スプリント目標が未達成であり、タスクの着手状況がゼロであるため。
+- What: スプリント名：スプリント SCRUM スプリント 1 (2025/09/17-2025/09/24)、合計タスク数：0、完了タスク数：0、完了率：0%。 data: sprint_total=0, sprint_done=0
+- So what: 目標達成状況：0%で完全に未達成。ボトルネック：スプリント開始時点において、タスクが全く登録されていない。Top Evidenceに示されるタスクは、スプリント開始前に存在していたものと推測される。 data: high_priority_unstarted=0
+- Next:  高優先度未着手タスクの登録と着手。福聖へのタスク割り当てと進捗確認を緊急に行う。
+
+
+2. 注目すべき予兆とリスク
+
+- スプリント開始時点でのタスク登録の欠如：これは、計画段階における深刻な問題を示唆しており、スプリントの失敗に直結するリスクである。
+- 全てのタスクが福聖に割り当てられている可能性：これは、個人の負担過多と、チーム全体の能力不足を示唆している。
+- Review平均日数が0.23日と短い：これは、レビュープロセスが不十分であるか、レビュー対象タスク数が少ないことを示唆している。
+
+
+3. 深い洞察と分析
+
+スプリント開始前にタスクが全く登録されていないという事実は、計画プロセスの重大な欠陥を示唆しています。これは、要件定義の不足、タスク分解の不備、あるいはスプリント計画会議の欠如などが原因として考えられます。また、全てのタスクが福聖に割り当てられている（Top Evidenceから推測）場合は、チームの協調性やスキルバランスに問題がある可能性があります。レビュー平均日数が短いことは、レビューの質や徹底性に問題がある可能性を示唆しています。
+
+
+4. 推奨アクションプラン
+
+- 福聖：直ちに未着手タスクを登録し、スプリントバックログに登録する。期限：2025年9月17日
+- チームリーダー：スプリント計画会議を速やかに開催し、タスクの割り当てと進捗管理を徹底する。
 
 ## リスク
 - 特筆すべきリスクなし
 
 ## エビデンス (Top)
-- SCRUM-3 | To Do | 7.0d | assignee:  | why: long stay | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-3
-- SCRUM-2 | To Do | 7.0d | assignee:  | why: long stay | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-2
-- SCRUM-4 | COMPLEAT | 2.0d | assignee:  | why:  | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-4
-- SCRUM-5 | IN_PROGRESS | 2.0d | assignee:  | why:  | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-5
-- SCRUM-1 | COMPLEAT | 2.0d | assignee:  | why:  | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-1
+- SCRUM-4 | 完了 | 2.0d | assignee: 福聖 | why:  | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-4
+- SCRUM-5 | REVIEWING | 2.0d | assignee: 福聖 | why:  | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-5
+- SCRUM-1 | 完了 | 2.0d | assignee: 福聖 | why:  | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-1
+- SCRUM-6 | pending | 2.0d | assignee:  | why:  | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-6
+- SCRUM-25 | IN_progress | 0.4d | assignee: 福聖 | why: due soon | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-25
 
 ## 短期アクション
 1) レビュー担当を1名追加 — 期待: Review平均を2日短縮

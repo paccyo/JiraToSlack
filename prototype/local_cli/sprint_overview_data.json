@@ -5,12 +5,12 @@
     "endDate": "2025-09-24T08:53:00.000Z"
   },
   "totals": {
-    "parents": 3,
-    "subtasks": 11,
-    "done": 9,
-    "notDone": 2
+    "parents": 5,
+    "subtasks": 22,
+    "done": 16,
+    "notDone": 6
   },
-  "doneRate": 0.8181818181818182,
+  "doneRate": 0.7272727272727273,
   "targetDoneRate": 0.8,
   "axis": "percent",
   "extrasAvailable": {
@@ -21,6 +21,7 @@
     "workload": true,
     "kpis": true,
     "risks": true,
-    "evidence": true
+    "evidence": true,
+    "ai_full_text": true
   }
 }

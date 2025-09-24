@@ -13,6 +13,19 @@
 			"isBackground": false,
 			"problemMatcher": [],
 			"group": "build"
+		},
+		{
+			"label": "Run pytest",
+			"type": "shell",
+			"command": "pytest",
+			"args": [
+				"-q"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$pytest"
+			],
+			"group": "build"
 		}
 	]
 }
