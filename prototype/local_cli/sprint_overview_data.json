@@ -24,6 +24,6 @@
     "kpis": true,
     "risks": true,
     "evidence": true,
-    "ai_full_text": false
+    "ai_full_text": true
   }
 }

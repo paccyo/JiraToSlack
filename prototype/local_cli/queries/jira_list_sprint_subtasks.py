@@ -310,33 +310,100 @@ def agile_list_issues_in_sprint(
     return 200, all_issues, ""
 
 
+def _extract_times_from_changelog(changelog: Dict[str, Any], start_names: List[str], done_names: List[str]) -> Tuple[Optional[str], Optional[str]]:
+    """Return (startedAt, completedAt) based on first status transition into start_names and into done_names.
+    Times are ISO strings from history.created. If not found, returns (None, None).
+    """
+    if not changelog:
+        return None, None
+    histories = changelog.get("histories") or []
+    # Sort ascending by created
+    try:
+        histories.sort(key=lambda h: h.get("created") or "")
+    except Exception:
+        pass
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    sset = {s.lower() for s in start_names}
+    dset = {s.lower() for s in done_names}
+    for h in histories:
+        items = h.get("items") or []
+        for it in items:
+            if (it.get("field") or "").lower() != "status":
+                continue
+            to_name = str(it.get("toString") or "").strip()
+            lto = to_name.lower()
+            ts = h.get("created")  # ISO-8601 string
+            if not started_at and lto in sset:
+                started_at = ts
+            if not completed_at and lto in dset:
+                completed_at = ts
+        if started_at and completed_at:
+            break
+    return started_at, completed_at
+
+
 def ensure_subtask_fields(
-    JIRA_DOMAIN: str, auth: HTTPBasicAuth, subtask: Dict[str, Any], sp_field_id: Optional[str]
+    JIRA_DOMAIN: str,
+    auth: HTTPBasicAuth,
+    subtask: Dict[str, Any],
+    sp_field_id: Optional[str],
+    include_changelog: bool,
+    start_status_names: List[str],
+    done_status_names: List[str],
 ) -> Tuple[int, Optional[Dict[str, Any]], str]:
     fields = subtask.get("fields") or {}
-    if fields.get("status") and fields.get("summary") and (not sp_field_id or sp_field_id in fields):
-        return 200, subtask, ""
+    need_fetch = False
+    # Check if required fields exist
+    required = ["summary", "status", "assignee", "issuetype", "created", "resolutiondate"]
+    for k in required:
+        if fields.get(k) is None:
+            need_fetch = True
+            break
+    if sp_field_id and sp_field_id not in fields:
+        need_fetch = True
 
     sub_id = subtask.get("id") or subtask.get("key")
     if not sub_id:
         return 400, None, "サブタスクのID/Keyが取得できませんでした"
 
-    query_fields = ["summary", "status"]
-    if sp_field_id:
-        query_fields.append(sp_field_id)
-    code, data, err = api_get(
-        f"{JIRA_DOMAIN}/rest/api/3/issue/{sub_id}", auth, params={"fields": ",".join(query_fields)}
-    )
-    if code != 200 or not data:
-        return code, None, f"サブタスク詳細取得に失敗: {err}"
+    data: Optional[Dict[str, Any]] = None
+    if need_fetch or include_changelog:
+        query_fields = [
+            "summary",
+            "status",
+            "assignee",
+            "issuetype",
+            "created",
+            "resolutiondate",
+        ]
+        if sp_field_id:
+            query_fields.append(sp_field_id)
+        params = {"fields": ",".join(query_fields)}
+        if include_changelog:
+            params["expand"] = "changelog"
+        code, data, err = api_get(f"{JIRA_DOMAIN}/rest/api/3/issue/{sub_id}", auth, params=params)
+        if code != 200 or not data:
+            return code, None, f"サブタスク詳細取得に失敗: {err}"
+        subtask["fields"] = fields = fields or {}
+        fds = (data.get("fields") or {})
+        fields.update({
+            "summary": fds.get("summary"),
+            "status": fds.get("status"),
+            "assignee": fds.get("assignee"),
+            "issuetype": fds.get("issuetype"),
+            "created": fds.get("created"),
+            "resolutiondate": fds.get("resolutiondate"),
+        })
+        if sp_field_id and sp_field_id in fds:
+            fields[sp_field_id] = fds.get(sp_field_id)
+        # Infer started/completed from changelog
+        if include_changelog and isinstance(data.get("changelog"), dict):
+            started_at, completed_at = _extract_times_from_changelog(data.get("changelog") or {}, start_status_names, done_status_names)
+            # Attach under synthetic container to avoid clashing
+            fields.setdefault("_times", {})
+            fields["_times"].update({"startedAt": started_at, "completedAt": completed_at})
 
-    subtask["fields"] = subtask.get("fields", {}) or {}
-    subtask["fields"].update({
-        "summary": data.get("fields", {}).get("summary"),
-        "status": data.get("fields", {}).get("status"),
-    })
-    if sp_field_id and sp_field_id in (data.get("fields") or {}):
-        subtask["fields"][sp_field_id] = data.get("fields", {}).get(sp_field_id)
     return 200, subtask, ""
 
 
@@ -393,6 +460,11 @@ def list_and_print_subtasks(
     agg_by_assignee: Dict[str, Dict[str, Any]] = {}
 
     results: List[Dict[str, Any]] = []
+    # env knobs
+    include_changelog = (os.getenv("INCLUDE_CHANGELOG", "1").lower() in ("1", "true", "yes"))
+    start_names = [s.strip() for s in os.getenv("START_STATUS_NAMES", "In Progress,In Review,Doing").split(",") if s.strip()]
+    done_names = [s.strip() for s in os.getenv("DONE_STATUS_NAMES", "Done,Closed,Resolved").split(",") if s.strip()]
+
     for issue in issues:
         fields = issue.get("fields", {})
         subtasks = fields.get("subtasks", []) or []
@@ -414,7 +486,15 @@ def list_and_print_subtasks(
 
         parent_done = 0
         for sub in subtasks:
-            code_s, sub_full, err_s = ensure_subtask_fields(JIRA_DOMAIN, auth, sub, sp_field_id)
+            code_s, sub_full, err_s = ensure_subtask_fields(
+                JIRA_DOMAIN,
+                auth,
+                sub,
+                sp_field_id,
+                include_changelog,
+                start_names,
+                done_names,
+            )
             if code_s != 200 or not sub_full:
                 print(f"  - {sub.get('key') or sub.get('id')} 取得失敗: {err_s}")
                 continue
@@ -423,6 +503,13 @@ def list_and_print_subtasks(
             sub_fields = sub_full.get("fields", {})
             sub_summary = sub_fields.get("summary")
             status = sub_fields.get("status")
+            sub_assignee = (sub_fields.get("assignee") or {}).get("displayName") or assignee
+            sub_type = (sub_fields.get("issuetype") or {}).get("name")
+            created = sub_fields.get("created")
+            resolutiondate = sub_fields.get("resolutiondate")
+            times = sub_fields.get("_times") or {}
+            started_at = times.get("startedAt")
+            completed_at = times.get("completedAt") or resolutiondate
             sp_value: Optional[float] = None
             if sp_field_id:
                 sp_raw = sub_fields.get(sp_field_id)
@@ -437,16 +524,33 @@ def list_and_print_subtasks(
             status_name = (status or {}).get("name") or "(不明)"
             badge = "Done" if done_flag else ("Not Done" if done_flag is False else "Unknown")
             if not output_json:
-                print(f"  - [{badge}] {sub_key} - {sub_summary} (Status: {status_name}, SP: {sp_value:g})")
+                extra = []
+                if sub_assignee:
+                    extra.append(f"担当:{sub_assignee}")
+                if sub_type:
+                    extra.append(f"タイプ:{sub_type}")
+                if created:
+                    extra.append(f"作成:{created}")
+                if started_at:
+                    extra.append(f"開始:{started_at}")
+                if completed_at:
+                    extra.append(f"完了:{completed_at}")
+                extra_txt = (" | " + ", ".join(extra)) if extra else ""
+                print(f"  - [{badge}] {sub_key} - {sub_summary} (Status: {status_name}, SP: {sp_value:g}){extra_txt}")
             parent_entry["subtasks"].append({
                 "key": sub_key,
                 "summary": sub_summary,
                 "status": status_name,
                 "done": bool(done_flag) if done_flag is not None else None,
                 "storyPoints": sp_value,
+                "assignee": sub_assignee,
+                "typeName": sub_type,
+                "created": created,
+                "startedAt": started_at,
+                "completedAt": completed_at,
             })
 
-            who = assignee or "(未割り当て)"
+            who = sub_assignee or assignee or "(未割り当て)"
             cur = agg_by_assignee.get(who) or {"assignee": who, "subtasks": 0, "done": 0, "storyPoints": 0.0}
             cur["subtasks"] += 1
             cur["storyPoints"] += float(sp_value)

@@ -1,0 +1,393 @@
+{
+  "sprint": {
+    "name": "SCRUM スプリント 1",
+    "startDate": "2025-09-17T08:53:35.977Z",
+    "endDate": "2025-09-24T08:53:00.000Z"
+  },
+  "parents": [
+    {
+      "parentKey": "SCRUM-5",
+      "parentSummary": "スプリント内の完了未完了タスクの件数取得",
+      "assignee": "福聖",
+      "subtasks": [
+        {
+          "key": "SCRUM-17",
+          "summary": "Jira APIを使用してスプリント内の全タスクを取得する",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T02:35:12.483+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T07:55:01.526+0900"
+        },
+        {
+          "key": "SCRUM-18",
+          "summary": "取得した件数を出力・表示する機能の実装",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T02:35:12.512+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T11:35:38.938+0900"
+        },
+        {
+          "key": "SCRUM-19",
+          "summary": "完了タスクと未完了タスクを分類するロジックの実装",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T02:35:12.518+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T11:35:41.175+0900"
+        }
+      ],
+      "doneCount": 3,
+      "totalSubtasks": 3
+    },
+    {
+      "parentKey": "SCRUM-1",
+      "parentSummary": "開発環境でのJira設定の整理",
+      "assignee": "福聖",
+      "subtasks": [
+        {
+          "key": "SCRUM-13",
+          "summary": "カスタムフィールドの整理",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T02:34:55.909+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T02:35:33.146+0900"
+        },
+        {
+          "key": "SCRUM-12",
+          "summary": "通知スキームの確認と整理",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T02:34:55.908+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T02:35:48.814+0900"
+        },
+        {
+          "key": "SCRUM-15",
+          "summary": "ワークフローの整理と最適化",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T02:34:55.921+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T02:35:52.016+0900"
+        },
+        {
+          "key": "SCRUM-14",
+          "summary": "Jira権限スキームの見直しと整理",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T02:34:55.918+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T07:54:31.735+0900"
+        },
+        {
+          "key": "SCRUM-16",
+          "summary": "不要なJiraプロジェクトや課題タイプの削除",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T02:34:56.180+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T02:35:46.440+0900"
+        }
+      ],
+      "doneCount": 5,
+      "totalSubtasks": 5
+    },
+    {
+      "parentKey": "SCRUM-4",
+      "parentSummary": "開発環境でのストーリーポイントの取得",
+      "assignee": "福聖",
+      "subtasks": [
+        {
+          "key": "SCRUM-8",
+          "summary": "Jira APIを使用してストーリーポイントを取得するスクリプトの作成",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 5.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T01:21:08.440+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T07:54:44.200+0900"
+        },
+        {
+          "key": "SCRUM-7",
+          "summary": "開発環境でのストーリーポイント取得スクリプトの動作確認",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 5.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T01:21:08.432+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T07:54:46.974+0900"
+        },
+        {
+          "key": "SCRUM-9",
+          "summary": "ストーリーポイント取得結果のログ出力機能の実装",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T01:21:08.446+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T07:54:50.129+0900"
+        }
+      ],
+      "doneCount": 3,
+      "totalSubtasks": 3
+    },
+    {
+      "parentKey": "SCRUM-26",
+      "parentSummary": "レポート作成",
+      "assignee": "福聖",
+      "subtasks": [
+        {
+          "key": "SCRUM-27",
+          "summary": "データ分析",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T10:26:37.142+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T11:36:10.116+0900"
+        },
+        {
+          "key": "SCRUM-29",
+          "summary": "レポート本文の執筆",
+          "status": "IN_progress",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T10:26:37.168+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-28",
+          "summary": "レポートのレビューと修正",
+          "status": "IN_progress",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T10:26:37.168+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-31",
+          "summary": "レポート構成の作成",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T10:26:37.186+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T11:36:17.484+0900"
+        },
+        {
+          "key": "SCRUM-30",
+          "summary": "データ収集",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T10:26:37.186+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T11:36:04.468+0900"
+        },
+        {
+          "key": "SCRUM-32",
+          "summary": "レポートの最終フォーマット調整",
+          "status": "IN_progress",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T10:26:37.918+0900",
+          "startedAt": null,
+          "completedAt": null
+        }
+      ],
+      "doneCount": 3,
+      "totalSubtasks": 6
+    },
+    {
+      "parentKey": "SCRUM-3",
+      "parentSummary": "JiraのSlack連携による今日のタスクの呼び出し",
+      "assignee": "sakiya sumida",
+      "subtasks": [
+        {
+          "key": "SCRUM-39",
+          "summary": "連携動作のテストと検証を行う",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "sakiya sumida",
+          "typeName": "Subtask",
+          "created": "2025-09-24T13:44:23.966+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T13:44:32.539+0900"
+        },
+        {
+          "key": "SCRUM-40",
+          "summary": "Jiraタスクの今日の分を抽出するクエリを作成する",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "sakiya sumida",
+          "typeName": "Subtask",
+          "created": "2025-09-24T13:44:23.970+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T13:44:38.425+0900"
+        },
+        {
+          "key": "SCRUM-41",
+          "summary": "Slackチャンネルへの通知設定を作成する",
+          "status": "IN_progress",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": "sakiya sumida",
+          "typeName": "Subtask",
+          "created": "2025-09-24T13:44:23.988+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-42",
+          "summary": "Slackに送信するメッセージフォーマットを設計する",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "sakiya sumida",
+          "typeName": "Subtask",
+          "created": "2025-09-24T13:44:23.990+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T13:44:51.494+0900"
+        },
+        {
+          "key": "SCRUM-43",
+          "summary": "Slack連携用のJiraアプリを設定する",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "sakiya sumida",
+          "typeName": "Subtask",
+          "created": "2025-09-24T13:44:24.024+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T13:44:57.028+0900"
+        }
+      ],
+      "doneCount": 4,
+      "totalSubtasks": 5
+    },
+    {
+      "parentKey": "SCRUM-25",
+      "parentSummary": "ユースケース別のレポート作成",
+      "assignee": "福聖",
+      "subtasks": [
+        {
+          "key": "SCRUM-33",
+          "summary": "レポート作成の自動化スクリプト開発",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T10:26:54.837+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T11:37:26.470+0900"
+        },
+        {
+          "key": "SCRUM-35",
+          "summary": "ユースケースの要件定義",
+          "status": "IN_progress",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T10:26:54.859+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-34",
+          "summary": "データ収集方法の決定",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T10:26:54.859+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T11:37:32.343+0900"
+        },
+        {
+          "key": "SCRUM-36",
+          "summary": "レポート内容のレビューと修正",
+          "status": "IN_progress",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T10:26:54.862+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-37",
+          "summary": "レポートフォーマットの設計",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T10:26:54.875+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T13:42:46.483+0900"
+        }
+      ],
+      "doneCount": 3,
+      "totalSubtasks": 5
+    }
+  ],
+  "totals": {
+    "parents": 6,
+    "subtasks": 27,
+    "done": 21,
+    "notDone": 6
+  }
+}

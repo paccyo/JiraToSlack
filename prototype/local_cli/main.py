@@ -363,14 +363,53 @@ def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Opt
             print("[Gemini] google-generativeai not installed or failed to import")
         return None
     try:
-        # Use REST transport to avoid gRPC plugin metadata issues and set a short timeout
+        # Configuration
+        model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+        fallback_model = os.getenv("GEMINI_MODEL_FALLBACK", "gemini-1.5-flash")
+        try:
+            timeout_s = float(os.getenv("GEMINI_TIMEOUT", "25"))
+        except Exception:
+            timeout_s = 25.0
+        try:
+            retries = int(os.getenv("GEMINI_RETRIES", "2"))
+        except Exception:
+            retries = 2
+        temp = float(os.getenv("GEMINI_TEMPERATURE", "0.2"))
+        top_p = float(os.getenv("GEMINI_TOP_P", "0.9"))
+
+        # Use REST transport to avoid gRPC plugin metadata issues
         genai.configure(api_key=api_key, transport="rest")
-        generation_config = {
-            "temperature": 0.4,
-            "top_p": 0.9,
-            "max_output_tokens": 512,
-        }
-        model = genai.GenerativeModel("gemini-2.5-flash-lite", generation_config=generation_config)
+        generation_config = {"temperature": temp, "top_p": top_p, "max_output_tokens": 640}
+        def _call(model_id: str) -> Optional[str]:
+            m = genai.GenerativeModel(model_id, generation_config=generation_config)
+            last_err: Optional[Exception] = None
+            for attempt in range(retries + 1):
+                try:
+                    out = m.generate_content(prompt, request_options={"timeout": timeout_s})
+                    text = (getattr(out, "text", None) or "").strip()
+                    if not text:
+                        # try concatenating from candidates
+                        cand_texts = []
+                        for c in getattr(out, "candidates", []) or []:
+                            parts = getattr(getattr(c, "content", None), "parts", []) or []
+                            frag = "".join(getattr(p, "text", "") for p in parts)
+                            if frag:
+                                cand_texts.append(frag)
+                        text = "\n".join(t for t in cand_texts if t).strip()
+                    if text:
+                        return text
+                except Exception as e:
+                    last_err = e
+                # backoff
+                try:
+                    import time as _t
+                    _t.sleep(0.6 * (attempt + 1))
+                except Exception:
+                    pass
+            # if all attempts failed
+            if os.getenv("GEMINI_DEBUG", "").lower() in ("1", "true", "yes") and last_err:
+                print(f"[Gemini] error on model {model_id}: {last_err}")
+            return None
         # --- プロンプト（出力形式を整形） ---
         intro = dedent(
             """
@@ -402,37 +441,141 @@ def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Opt
             + output_format
             + f"\nコンテキスト(JSON): {json.dumps(context, ensure_ascii=False)}\n"
         )
-        out = model.generate_content(prompt, request_options={"timeout": 20},    config=types.GenerateContentConfig(
-        temperature=0.0
-    ))
-        # Robust text extraction
-        text = (getattr(out, "text", None) or "").strip()
-        if not text:
-            try:
-                # Fallback: join from candidates/parts
-                cand_texts = []
-                for c in getattr(out, "candidates", []) or []:
-                    parts = getattr(getattr(c, "content", None), "parts", []) or []
-                    frag = "".join(getattr(p, "text", "") for p in parts)
-                    if frag:
-                        cand_texts.append(frag)
-                text = "\n".join(t for t in cand_texts if t).strip()
-            except Exception:
-                text = ""
-        # If still empty, log prompt feedback (debug) and return gracefully
-        if not text:
-            if os.getenv("GEMINI_DEBUG", "").lower() in ("1", "true", "yes"):
-                pf = getattr(out, "prompt_feedback", None)
-                reason = getattr(pf, "block_reason", None) if pf else None
-                print(f"[Gemini] empty response. block_reason={reason}")
-            return None
-        # Return the full formatted text as-is to respect the prompt's output format
+        # Try primary then fallback model
+        text = _call(model_name)
+        if not text and fallback_model and fallback_model != model_name:
+            text = _call(fallback_model)
+        if not text and os.getenv("GEMINI_DEBUG", "").lower() in ("1", "true", "yes"):
+            print("[Gemini] empty response from both primary and fallback models")
         return text
     except Exception as e:
         if os.getenv("GEMINI_DEBUG", "").lower() in ("1", "true", "yes"):
             print(f"[Gemini] error: {e}")
         return None
 
+
+def maybe_gemini_justify_evidences(
+    api_key: Optional[str], evidences: List[Dict[str, Any]]
+) -> Dict[str, str]:
+    """
+    各エビデンスの「重要な理由」をGeminiで1文生成し、{key: reason} を返す。
+    - 環境変数 GEMINI_EVIDENCE_REASON=0 で無効化（既定: 有効）
+    - 失敗時は空dictを返し、呼び出し元で元の理由を維持
+    - 長さ上限: EVIDENCE_REASON_MAX_CHARS（既定 38 文字、超過時は省略）
+    """
+    try:
+        if os.getenv("GEMINI_EVIDENCE_REASON", "1").lower() in ("0", "false", "no"):
+            return {}
+        if os.getenv("GEMINI_DISABLE", "").lower() in ("1", "true", "yes"):
+            return {}
+        if not api_key or not genai:
+            return {}
+
+        model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+        fallback_model = os.getenv("GEMINI_MODEL_FALLBACK", "gemini-1.5-flash-8b")
+        try:
+            timeout_s = float(os.getenv("GEMINI_TIMEOUT", "25"))
+        except Exception:
+            timeout_s = 25.0
+        temp = float(os.getenv("GEMINI_TEMPERATURE", "0.2"))
+        top_p = float(os.getenv("GEMINI_TOP_P", "0.9"))
+        try:
+            max_chars = int(os.getenv("EVIDENCE_REASON_MAX_CHARS", "38"))
+        except Exception:
+            max_chars = 38
+
+        # 生成に必要な最小情報を構築
+        items = []
+        for e in evidences:
+            items.append({
+                "key": e.get("key"),
+                "summary": e.get("summary"),
+                "status": e.get("status"),
+                "assignee": e.get("assignee"),
+                "priority": e.get("priority"),
+                "duedate": e.get("duedate") or e.get("due"),
+                "days": e.get("days"),
+            })
+
+        prompt = dedent(
+            f"""
+            あなたはスクラムチームのアジャイルコーチです。以下の各小タスクについて、なぜ重要かを日本語で1文ずつ作成してください。
+            制約:
+            - 各行は最大{max_chars}文字以内で簡潔に。
+            - 根拠は滞留日数/期限/優先度/状態/担当など入力から導ける事実のみ。
+            - 断言的で実務的な表現（例: 期限差し迫り、優先度高、レビュー滞留 等）。
+            出力形式はJSONのみで、キーを課題キー、値を理由文字列としたオブジェクトで返してください。
+
+            入力: {json.dumps(items, ensure_ascii=False)}
+            出力: {{ "KEY": "理由" }} のマップのみを返してください。
+            """
+        ).strip()
+
+        genai.configure(api_key=api_key, transport="rest")
+        generation_config = {"temperature": temp, "top_p": top_p, "max_output_tokens": 256}
+
+        def _call(model_id: str) -> Optional[str]:
+            try:
+                m = genai.GenerativeModel(model_id, generation_config=generation_config)
+                out = m.generate_content(prompt, request_options={"timeout": timeout_s})
+                text = (getattr(out, "text", None) or "").strip()
+                if not text:
+                    # candidates fallback
+                    cand_texts = []
+                    for c in getattr(out, "candidates", []) or []:
+                        parts = getattr(getattr(c, "content", None), "parts", []) or []
+                        frag = "".join(getattr(p, "text", "") for p in parts)
+                        if frag:
+                            cand_texts.append(frag)
+                    text = "\n".join(t for t in cand_texts if t).strip()
+                return text or None
+            except Exception:
+                return None
+
+        text = _call(model_name) or (fallback_model and _call(fallback_model)) or None
+        if not text:
+            if os.getenv("GEMINI_DEBUG", "").lower() in ("1", "true", "yes"):
+                print("- AI要約: evidence reasons 空応答（元の理由を使用）")
+            return {}
+
+        # JSON抽出
+        result: Dict[str, str] = {}
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, dict):
+                result = {str(k): str(v) for k, v in parsed.items()}
+        except Exception:
+            try:
+                import re as _re
+                m = _re.search(r"\{[\s\S]*\}", text)
+                if m:
+                    parsed = json.loads(m.group(0))
+                    if isinstance(parsed, dict):
+                        result = {str(k): str(v) for k, v in parsed.items()}
+            except Exception:
+                result = {}
+
+        # 文字数制限を適用
+        clipped: Dict[str, str] = {}
+        for e in evidences:
+            k = e.get("key")
+            if not k:
+                continue
+            v = (result.get(k) or "").strip()
+            if v:
+                if len(v) > max_chars:
+                    # keep room for ellipsis if needed
+                    clipped[k] = (v[: max(1, max_chars - 1)] + "…")
+                else:
+                    clipped[k] = v
+
+        if os.getenv("GEMINI_DEBUG", "").lower() in ("1", "true", "yes") and clipped:
+            print(f"- AI要約: evidence reasons {len(clipped)}件 生成")
+        return clipped
+    except Exception as e:
+        if os.getenv("GEMINI_DEBUG", "").lower() in ("1", "true", "yes"):
+            print(f"[Gemini] evidence reasons error: {e}")
+        return {}
 
 def draw_png(
     output_path: str,
@@ -1248,7 +1391,8 @@ def draw_png(
         if not ev:
             return
         # header
-        col_w = [int(w*0.12), int(w*0.14), int(w*0.14), int(w*0.42), int(w*0.18)]
+        # 課題列にサマリーも併記するため幅を広げる
+        col_w = [int(w*0.28), int(w*0.14), int(w*0.14), int(w*0.34), int(w*0.10)]
         headers = ["課題", "担当者", "ステータス", "重要な理由", "リンク"]
         cx = x0
         y = y0
@@ -1263,7 +1407,11 @@ def draw_png(
         # rows
         for row in ev:
             cx = x0 + 8
-            vals = [row.get("key"), row.get("assignee"), row.get("status"), row.get("why"), row.get("link")]
+            key_summary = str(row.get("key") or "")
+            summ = str(row.get("summary") or "").strip()
+            if summ:
+                key_summary = f"{key_summary} {summ}"
+            vals = [key_summary, row.get("assignee"), row.get("status"), row.get("why"), row.get("link")]
             for i, val in enumerate(vals):
                 cell_w = col_w[i] - 10
                 txt = trim_to_width(str(val or ""), cell_w, font_sm)
@@ -1658,7 +1806,7 @@ def main() -> int:
         if auth and JIRA_DOMAIN and ev_list:
             keys_csv = ",".join([str(e["key"]) for e in ev_list])
             url = f"{JIRA_DOMAIN}/rest/api/3/search"
-            fields = "status,assignee,priority,duedate"
+            fields = "summary,status,assignee,priority,duedate"
             params = {"jql": f"key in ({keys_csv})", "fields": fields, "maxResults": topn}
             code_s, data_s, _ = api_get(url, auth, params=params)
             detail_map: Dict[str, Dict[str, Any]] = {}
@@ -1666,6 +1814,7 @@ def main() -> int:
                 for iss in (data_s.get("issues") or []):
                     flds = iss.get("fields") or {}
                     detail_map[iss.get("key")] = {
+                        "summary": flds.get("summary") or "",
                         "status": ((flds.get("status") or {}).get("name") or ""),
                         "assignee": ((flds.get("assignee") or {}).get("displayName") or ""),
                         "priority": ((flds.get("priority") or {}).get("name") or ""),
@@ -1676,6 +1825,7 @@ def main() -> int:
             for e in ev_list:
                 k = e.get("key")
                 det = detail_map.get(k, {})
+                e["summary"] = det.get("summary", "")
                 e["status"] = det.get("status", "")
                 e["assignee"] = det.get("assignee", "")
                 # why heuristic
@@ -1700,6 +1850,19 @@ def main() -> int:
                     why.append("long stay")
                 e["why"] = ", ".join(why)
                 e["link"] = f"{dom}/browse/{k}"
+        # Optionally enhance 'why' with Gemini (one-liner) while keeping safe fallback
+        try:
+            raw_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+            gemini_key = _sanitize_api_key(raw_key)
+            if gemini_key and ev_list:
+                ai_reasons = maybe_gemini_justify_evidences(gemini_key, ev_list)
+                if ai_reasons:
+                    for e in ev_list:
+                        k = e.get("key")
+                        if k and ai_reasons.get(k):
+                            e["why"] = ai_reasons[k]
+        except Exception:
+            pass
         extras["evidence"] = ev_list
     except Exception:
         extras["evidence"] = None
@@ -1905,7 +2068,13 @@ def main() -> int:
         md.append("")
         md.append("## エビデンス (Top)")
         for e in ev_rows:
-            md.append(f"- {e.get('key')} | {e.get('status')} | {e.get('days'):.1f}d | assignee: {e.get('assignee','')} | why: {e.get('why','')} | {e.get('link')}")
+            _k = str(e.get('key') or '')
+            _s = str(e.get('summary') or '').strip()
+            if _s:
+                ks = f"{_k} {_s}"
+            else:
+                ks = _k
+            md.append(f"- {ks} | {e.get('status')} | {e.get('days'):.1f}d | assignee: {e.get('assignee','')} | why: {e.get('why','')} | {e.get('link')}")
         # Short actions
         md.append("")
         md.append("## 短期アクション")
@@ -1915,6 +2084,25 @@ def main() -> int:
             f.write("\n".join(md))
     except Exception:
         pass
+    # Write enriched tasks JSON for analysis
+    try:
+        enriched = {
+            "sprint": {
+                "name": sprint_name,
+                "startDate": sprint_start,
+                "endDate": sprint_end,
+            },
+            "parents": data.get("parents", []),
+            "totals": data.get("totals", {}),
+        }
+        path_tasks = Path(base_dir) / "sprint_overview_tasks.json"
+        with open(str(path_tasks), "w", encoding="utf-8") as f:
+            json.dump(enriched, f, ensure_ascii=False, indent=2)
+        if os.getenv("DASHBOARD_LOG", "1").lower() in ("1", "true", "yes"):
+            print(str(path_tasks))
+    except Exception as e:
+        if os.getenv("DASHBOARD_LOG", "1").lower() in ("1", "true", "yes"):
+            print(f"[warn] enriched tasks JSON の書き出しに失敗: {e}")
     # Write metrics JSON for Slack integration
     try:
         totals = data.get("totals", {})
