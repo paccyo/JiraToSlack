@@ -281,7 +281,7 @@ def agile_list_issues_in_sprint(
     start_at = 0
     all_issues: List[Dict[str, Any]] = []
     fields = fields or ["summary", "issuetype", "status", "subtasks", "assignee"]
-    jql_parts: List[str] = ["issuetype not in subTaskIssueTypes()"]
+    jql_parts: List[str] = ["type not in subTaskIssueTypes()"]
     if project_key:
         jql_parts.insert(0, f"project={project_key}")
     jql = " AND ".join(jql_parts)

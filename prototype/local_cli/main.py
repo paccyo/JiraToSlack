@@ -8,6 +8,7 @@ import requests
 from requests.auth import HTTPBasicAuth
 try:
     import google.generativeai as genai  # type: ignore
+    from google.generativeai import types
 except Exception:
     genai = None  # type: ignore
 from textwrap import dedent
@@ -252,6 +253,57 @@ def approximate_count(JIRA_DOMAIN: str, auth: HTTPBasicAuth, jql: str) -> Tuple[
     return code, None, err
 
 
+def search_count(JIRA_DOMAIN: str, auth: HTTPBasicAuth, jql: str) -> Tuple[int, Optional[int], str]:
+    """Fallback using Search API to retrieve accurate total without fetching issues.
+    Uses maxResults=0 to avoid payload; relies on 'total' field in response.
+    """
+    try:
+        resp = requests.get(
+            f"{JIRA_DOMAIN}/rest/api/3/search",
+            auth=auth,
+            headers={"Accept": "application/json"},
+            params={"jql": jql, "startAt": 0, "maxResults": 0, "fields": "none"},
+            timeout=30,
+        )
+    except requests.RequestException as e:
+        return 0, None, f"HTTPリクエストエラー: {e}"
+    if resp.status_code != 200:
+        return resp.status_code, None, resp.text
+    try:
+        data = resp.json()
+        total = int(data.get("total", 0))
+        return 200, total, ""
+    except Exception as e:
+        return 200, None, f"JSON解析失敗: {e}"
+
+
+def agile_sprint_count(JIRA_DOMAIN: str, auth: HTTPBasicAuth, sprint_id: int, jql_filter: Optional[str] = None) -> Tuple[int, Optional[int], str]:
+    """Count issues in a sprint via Agile API without fetching items.
+    Uses maxResults=0 for efficiency. Optional JQL filter applies on top.
+    """
+    params: Dict[str, Any] = {"maxResults": 0}
+    if jql_filter:
+        params["jql"] = jql_filter
+    try:
+        resp = requests.get(
+            f"{JIRA_DOMAIN}/rest/agile/1.0/sprint/{int(sprint_id)}/issue",
+            auth=auth,
+            headers={"Accept": "application/json"},
+            params=params,
+            timeout=30,
+        )
+    except requests.RequestException as e:
+        return 0, None, f"HTTPリクエストエラー: {e}"
+    if resp.status_code != 200:
+        return resp.status_code, None, resp.text
+    try:
+        data = resp.json()
+        total = int(data.get("total", 0))
+        return 200, total, ""
+    except Exception as e:
+        return 200, None, f"JSON解析失敗: {e}"
+
+
 def try_load_font(size: int) -> ImageFont.ImageFont:
     candidates: List[str] = []
     if os.name == "nt":
@@ -318,7 +370,7 @@ def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Opt
             "top_p": 0.9,
             "max_output_tokens": 512,
         }
-        model = genai.GenerativeModel("gemini-1.5-flash", generation_config=generation_config)
+        model = genai.GenerativeModel("gemini-2.5-flash-lite", generation_config=generation_config)
         # --- プロンプト（出力形式を整形） ---
         intro = dedent(
             """
@@ -350,7 +402,9 @@ def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Opt
             + output_format
             + f"\nコンテキスト(JSON): {json.dumps(context, ensure_ascii=False)}\n"
         )
-        out = model.generate_content(prompt, request_options={"timeout": 20})
+        out = model.generate_content(prompt, request_options={"timeout": 20},    config=types.GenerateContentConfig(
+        temperature=0.0
+    ))
         # Robust text extraction
         text = (getattr(out, "text", None) or "").strip()
         if not text:
@@ -993,6 +1047,29 @@ def draw_png(
         sum_map: Dict[str, float] = {}
         cnt_map: Dict[str, int] = {}
         vals_map: Dict[str, List[float]] = {}
+
+        # normalize function to merge same meanings (e.g., IN_PROGRESS vs In Progress)
+        def norm_status(name: str) -> str:
+            s = str(name or "").strip()
+            if not s:
+                return s
+            key = s.lower().replace(" ", "_")
+            # common mappings
+            aliases = {
+                "in_progress": "In Progress",
+                "inprogress": "In Progress",
+                "in-progress": "In Progress",
+                "todo": "To Do",
+                "to_do": "To Do",
+                "to-do": "To Do",
+                "in_review": "In Review",
+                "inreview": "In Review",
+                "qa": "QA",
+                "quality_assurance": "QA",
+                "done": "Done",
+                "review": "Review",
+            }
+            return aliases.get(key, s)
         for row in per_issue:
             by = row.get("byStatus") or {}
             for st, days in by.items():
@@ -1000,14 +1077,21 @@ def draw_png(
                     d = float(days)
                 except Exception:
                     d = 0.0
-                sum_map[st] = sum_map.get(st, 0.0) + d
-                cnt_map[st] = cnt_map.get(st, 0) + 1
-                vals_map.setdefault(st, []).append(d)
+                label = norm_status(st)
+                sum_map[label] = sum_map.get(label, 0.0) + d
+                cnt_map[label] = cnt_map.get(label, 0) + 1
+                vals_map.setdefault(label, []).append(d)
         if not sum_map:
             return y0
         items = [(k, (sum_map[k] / max(1, cnt_map.get(k, 1)))) for k in sum_map.keys()]
         # sort by avg days desc
         items.sort(key=lambda x: -x[1])
+        # limit to max statuses for display (default 6)
+        try:
+            max_statuses = int(os.getenv("TIS_MAX_STATUSES", "6"))
+        except Exception:
+            max_statuses = 6
+        items = items[:max(1, max_statuses)]
         g.text((x0, y0 - 18), "工程滞在時間（日）(avg | median)", font=font_md, fill=col_text)
         # layout grid 1 row, N columns (small heatmap)
         pad = 8
@@ -1072,9 +1156,9 @@ def draw_png(
         card_h = h
         # six KPI cards
         order = [
-            ("projectTotal", "プロジェクト総件数", (40, 100, 200)),
-            ("sprintTotal", "スプリント件数(課題)", (60, 160, 60)),
-            ("sprintDone", "スプリント完了(課題)", (27, 158, 119)),
+            ("projectTotal", "プロジェクト内総タスク数", (40, 100, 200)),
+            ("sprintTotal", "スプリント内総タスク数", (60, 160, 60)),
+            ("sprintDone", "スプリント内総完了タスク数", (27, 158, 119)),
             ("overdue", "期限遵守中✅", (60, 140, 60)),
             ("dueSoon", "注意:7日以内期限", (230, 140, 0)),
             ("highPriorityTodo", "要注意タスク(高優先度)", (200, 120, 60)),
@@ -1438,6 +1522,11 @@ def main() -> int:
     except Exception:
         extras["velocity"] = None
     try:
+        # B2. Project sprint count (all states)
+        extras["project_sprint_count"] = get_json_from_script_args(str(base_dir / "queries" / "jira_count_project_sprints.py"), [])
+    except Exception:
+        extras["project_sprint_count"] = None
+    try:
         # C. Status distribution (sprint scope, approx)
         sc_args = ["--scope", "sprint", "--mode", os.getenv("STATUS_COUNTS_MODE", "approx")]
         extras["status_counts"] = get_json_from_script_args(str(base_dir / "queries" / "jira_q_status_counts.py"), sc_args)
@@ -1474,37 +1563,71 @@ def main() -> int:
     except Exception:
         pass
     try:
-        # High priority unstarted (approximate count via Search Approximate)
+        # High priority unstarted count
         if auth and sprint and JIRA_DOMAIN:
             sid = sprint.get("id")
             pri = os.getenv("HIGH_PRIORITIES", "Highest,High")
-            # Quote priorities for JQL
             pri_list = ",".join([f'"{p.strip()}"' for p in pri.split(",") if p.strip()])
-            jql = f"Sprint={sid} AND priority in ({pri_list}) AND statusCategory = \"To Do\""
+            jql = f"Sprint={sid} AND type in subTaskIssueTypes() AND priority in ({pri_list}) AND statusCategory = \"To Do\""
             code_c, cnt, _ = approximate_count(JIRA_DOMAIN, auth, jql)
+            if not (code_c == 200 and cnt is not None):
+                code_c, cnt, _ = search_count(JIRA_DOMAIN, auth, jql)
             if code_c == 200 and cnt is not None:
                 risks["highPriorityTodo"] = int(cnt)
     except Exception:
         pass
-    # projectTotal / sprintTotal counts
+    # Enforce risks to be subtask-based (override with subtask-only JQL when possible)
     try:
+        if auth and sprint and JIRA_DOMAIN:
+            sid = sprint.get("id")
+            # Overdue (subtasks only)
+            jql_od = f"Sprint={sid} AND type in subTaskIssueTypes() AND duedate < endOfDay() AND statusCategory != \"Done\""
+            code_od, cnt_od, _ = approximate_count(JIRA_DOMAIN, auth, jql_od)
+            if not (code_od == 200 and cnt_od is not None):
+                code_od, cnt_od, _ = search_count(JIRA_DOMAIN, auth, jql_od)
+            if code_od == 200 and cnt_od is not None:
+                risks["overdue"] = int(cnt_od)
+                kpis["overdue"] = risks["overdue"]
+            # Due soon (subtasks only)
+            ds_days = os.getenv("DUE_SOON_DAYS", "7")
+            jql_ds = (
+                f"Sprint={sid} AND type in subTaskIssueTypes() "
+                f"AND duedate >= startOfDay() AND duedate <= endOfDay(+{ds_days}d) "
+                f"AND statusCategory != \"Done\""
+            )
+            code_ds, cnt_ds, _ = approximate_count(JIRA_DOMAIN, auth, jql_ds)
+            if not (code_ds == 200 and cnt_ds is not None):
+                code_ds, cnt_ds, _ = search_count(JIRA_DOMAIN, auth, jql_ds)
+            if code_ds == 200 and cnt_ds is not None:
+                risks["dueSoon"] = int(cnt_ds)
+    except Exception:
+        pass
+    # projectTotal / sprintTotal counts (subtask-based for sprint)
+    try:
+        # Sprint totals from aggregated data (subtasks only)
+        try:
+            totals_obj = (data or {}).get("totals", {}) if isinstance(data, dict) else {}
+            kpis["sprintTotal"] = int(totals_obj.get("subtasks", 0))
+            kpis["sprintDone"] = int(totals_obj.get("done", 0))
+        except Exception:
+            pass
         if auth and JIRA_DOMAIN:
-            # project total
-            proj_key = os.getenv("JIRA_PROJECT_KEY") or try_infer_project_key_from_board(JIRA_DOMAIN, auth, board) or None
-            if proj_key:
-                code_pt, cnt_pt, _ = approximate_count(JIRA_DOMAIN, auth, f"project={proj_key}")
-                if code_pt == 200 and cnt_pt is not None:
-                    kpis["projectTotal"] = int(cnt_pt)
-            # sprint total
-            if sprint:
-                sid = sprint.get("id")
-                code_st, cnt_st, _ = approximate_count(JIRA_DOMAIN, auth, f"Sprint={sid}")
-                if code_st == 200 and cnt_st is not None:
-                    kpis["sprintTotal"] = int(cnt_st)
-                # sprint done
-                code_sd, cnt_sd, _ = approximate_count(JIRA_DOMAIN, auth, f"Sprint={sid} AND statusCategory = \"Done\"")
-                if code_sd == 200 and cnt_sd is not None:
-                    kpis["sprintDone"] = int(cnt_sd)
+            # Prefer dedicated query script for project subtasks
+            try:
+                ps = get_json_from_script_args(str(base_dir / "queries" / "jira_count_project_subtasks.py"), [])
+                if isinstance(ps, dict):
+                    extras["project_subtask_count"] = ps
+                    kpis["projectTotal"] = int(ps.get("total", 0))
+            except Exception:
+                # Fallback to inline JQL if script fails
+                proj_key = os.getenv("JIRA_PROJECT_KEY") or try_infer_project_key_from_board(JIRA_DOMAIN, auth, board) or None
+                if proj_key:
+                    jql_proj_sub = f"project={proj_key} AND type in subTaskIssueTypes()"
+                    code_pt, cnt_pt, _ = approximate_count(JIRA_DOMAIN, auth, jql_proj_sub)
+                    if not (code_pt == 200 and cnt_pt is not None):
+                        code_pt, cnt_pt, _ = search_count(JIRA_DOMAIN, auth, jql_proj_sub)
+                    if code_pt == 200 and cnt_pt is not None:
+                        kpis["projectTotal"] = int(cnt_pt)
     except Exception:
         pass
     # carry risks into KPI deck as well
@@ -1654,6 +1777,21 @@ def main() -> int:
                 print(f"- リスク: overdue={r.get('overdue')}, dueSoon={r.get('dueSoon')}, highPriorityTodo={r.get('highPriorityTodo')}")
             except Exception:
                 pass
+            # Project subtasks (detailed)
+            psc2 = extras.get("project_subtask_count")
+            if isinstance(psc2, dict):
+                try:
+                    print(f"- プロジェクト(小タスク): total={psc2.get('total')}, done={psc2.get('done')}, notDone={psc2.get('notDone')}")
+                except Exception:
+                    pass
+            # Project sprint counts
+            psc = extras.get("project_sprint_count")
+            if isinstance(psc, dict):
+                try:
+                    bys = psc.get("byState", {}) or {}
+                    print(f"- プロジェクトのスプリント数: total={psc.get('total')} (active={bys.get('active')}, future={bys.get('future')}, closed={bys.get('closed')})")
+                except Exception:
+                    pass
             # Evidence
             ev = extras.get("evidence")
             if isinstance(ev, list):
@@ -1710,14 +1848,29 @@ def main() -> int:
         if auth and JIRA_DOMAIN and sprint:
             sid = sprint.get("id")
             if overdue_cnt:
-                overdue_keys = search_issue_keys(JIRA_DOMAIN, auth, f"Sprint={sid} AND duedate < endOfDay() AND statusCategory != \"Done\"", 10)
+                overdue_keys = search_issue_keys(
+                    JIRA_DOMAIN,
+                    auth,
+                    f"Sprint={sid} AND type in subTaskIssueTypes() AND duedate < endOfDay() AND statusCategory != \"Done\"",
+                    10,
+                )
             if due_soon_cnt:
                 days = os.getenv("DUE_SOON_DAYS", "7")
-                due_soon_keys = search_issue_keys(JIRA_DOMAIN, auth, f"Sprint={sid} AND duedate >= startOfDay() AND duedate <= endOfDay(+{days}d) AND statusCategory != \"Done\"", 10)
+                due_soon_keys = search_issue_keys(
+                    JIRA_DOMAIN,
+                    auth,
+                    f"Sprint={sid} AND type in subTaskIssueTypes() AND duedate >= startOfDay() AND duedate <= endOfDay(+{days}d) AND statusCategory != \"Done\"",
+                    10,
+                )
             if hp_cnt:
                 pri = os.getenv("HIGH_PRIORITIES", "Highest,High")
                 pri_list = ",".join([f'"{p.strip()}"' for p in pri.split(",") if p.strip()])
-                hp_keys = search_issue_keys(JIRA_DOMAIN, auth, f"Sprint={sid} AND priority in ({pri_list}) AND statusCategory = \"To Do\"", 10)
+                hp_keys = search_issue_keys(
+                    JIRA_DOMAIN,
+                    auth,
+                    f"Sprint={sid} AND type in subTaskIssueTypes() AND priority in ({pri_list}) AND statusCategory = \"To Do\"",
+                    10,
+                )
         # Evidence topN
         ev_rows = extras.get("evidence", []) or []
         # Markdown compose
