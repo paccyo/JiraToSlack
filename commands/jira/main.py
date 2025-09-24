@@ -1,7 +1,7 @@
 
 
 
-class Command_Jira_Responce:
+class CommandJiraRepository:
     def __init__(self):
           pass
     

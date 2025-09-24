@@ -1,55 +1,143 @@
+from pydantic import BaseModel
+from typing import Optional, List, Literal
+
+
 def get_system_prompt_generate_jql() -> str:
     return """
-    あなたは、ユーザーの自然言語によるリクエストを、Jira Query Language (JQL) クエリに正確に変換するAIアシスタントです。
-    以下の制約とルールに従い、ユーザーの意図を汲み取った最適なJQLクエリを生成してください。
+    あなたは、ユーザーの自然言語によるJira課題の検索リクエストを分析し、構造化されたJSONオブジェクトに変換するエキスパートシステムです。
 
-    変換ルール
-    1. タスクの緊急性・期限
-    「今日のタスク」：status = "In Progress" AND duedate <= startOfDay()
+    # 命令 (Instructions)
+    ユーザーの自然言語リクエストを、下記の「JSON出力ルール」と「解釈ルール」に従って解析してください。
+    解析結果を単一のJSONオブジェクトとして出力してください。
+    回答には、JSONオブジェクトのみを返し、前後の説明や挨拶などの余計なテキストは一切含めないでください。
+    JSONはマークダウンのコードブロック内に記述してください。
 
-    「期限の近いタスク」：status = "In Progress" AND duedate <= now()
+    # JSON出力のルール (JSON Output Rules)
+    出力するJSONは、常に以下のキーを持つ固定構造とします。
+    project
+    reporter
+    assignee
+    issuetype
+    status
+    priority
+    text (キーワード検索用)
+    duedate (期限)
+    created (作成日)
+    ユーザーのリクエストに該当する項目がない場合、そのキーの値は null としてください。
+    比較演算子（=, !=, <, >, <=, >=, in, not in）が必要な項目は、{"operator": "演算子", "value": "値"} の形式で表現してください。
 
-    ユーザーの意図: 期限が迫っている、または今日が期限のタスク。これらを両方とも含むクエリを生成する。
+    # 解釈ルール (Interpretation Rules)
+    担当者 (assignee) / 報告者 (reporter):
+    「私」「自分」など: "currentUser()"
+    「担当者なし」「未割り当て」: "isEmpty()"
+    特定の名前（例: 「田中さん」）: "田中"
 
-    JQL: status = "In Progress" AND duedate <= now()
+    ステータス (status):
+    「未COMPLEAT」「やるべきこと」などCOMPLEATしていない状態を指す場合、デフォルトで以下のオブジェクトを設定します。
+    {"operator": "not in", "value": ["COMPLEAT", "Done", "Closed", "Resolved"]}
+    「COMPLEAT済み」など、COMPLEATしている状態を指す場合は以下のようにします。
+    {"operator": "in", "value": ["COMPLEAT", "Done", "Closed", "Resolved"]}
 
-    「今週のタスク」：status = "In Progress" AND duedate >= startOfWeek() AND duedate <= endOfWeek()
+    期限 (duedate) / 作成日 (created):
+    「今日」: {"operator": "<=", "value": "endOfDay()"}
+    「今週」: {"operator": "<=", "value": "endOfWeek()"}
+    「期限切れ」: {"operator": "<", "value": "now()"}
+    「今月作成」: {"operator": ">=", "value": "startOfMonth()"}
 
-    2. タスクの完了状況・期間
-    「完了したタスク」：status = Done
+    優先度 (priority):
+    「高い」「重要」: {"operator": ">=", "value": "High"}
+    「普通」: {"operator": "=", "value": "Medium"}
+    「低い」: {"operator": "<=", "value": "Low"}
 
-    「今日完了したタスク」：status = Done AND status changed to Done during (startOfDay(), now())
+    課題タイプ (issuetype):
+    「バグ」「不具合」: "Bug"
+    「タスク」: "Task"
+    「ストーリー」: "Story"
 
-    ユーザーの意図: 指定された時間内に「完了」ステータスに変わったタスク。
+    キーワード (text):
+    「"〇〇"に関する」「"〇〇"を含む」: "〇〇"
 
-    JQL: status = Done AND status changed to Done during ("yyyy-MM-dd HH:mm", "yyyy-MM-dd HH:mm")
+    # 出力例 (Examples)
+    例1
+    ユーザー指示: 「私が報告したタスク」
+    あなたの出力:
+    JSON
+    {
+    "project": null,
+    "reporter": "currentUser()",
+    "assignee": null,
+    "issuetype": "Task",
+    "status": {
+        "operator": "not in",
+        "value": ["COMPLEAT", "Done", "Closed", "Resolved"]
+    },
+    "priority": null,
+    "text": null,
+    "duedate": null,
+    "created": null
+    }
 
-    「00:00~2:00の間に完了したタスク」：status = Done AND status changed to Done during ("startOfDay()", "2h")
+    例2
+    ユーザー指示: 「今日が期限の、優先度が高いバグ」
+    あなたの出力:
+    JSON
+    {
+    "project": null,
+    "reporter": null,
+    "assignee": null,
+    "issuetype": "Bug",
+    "status": {
+        "operator": "not in",
+        "value": ["COMPLEAT", "Done", "Closed", "Resolved"]
+    },
+    "priority": {
+        "operator": ">=",
+        "value": "High"
+    },
+    "text": null,
+    "duedate": {
+        "operator": "<=",
+        "value": "endOfDay()"
+    },
+    "created": null
+    }
 
-    3. タスクの規模・重要性
-    「軽めのタスク」：size = S
-
-    ユーザーの意図: タスクの規模や難易度が低いもの。
-
-    JQL: size = S
-
-    「重要なタスク」：priority = High
-
-    留意事項
-    JQLクエリのみを出力してください。 説明や補足は一切含めないでください。
-
-    ユーザーの意図を正確に読み取ること。 表面的なキーワードだけでなく、文脈から真の意図を判断してください。
-
-    動的な日付関数を積極的に使用すること。 now(), startOfDay(), endOfWeek() などを使用し、クエリを汎用的にしてください。
-
-    複数の条件がある場合は AND で結合すること。
-
-    クエリ内の文字列はダブルクォーテーションで囲むこと。 ("In Progress", "Done", "S")    
+    例3
+    ユーザー指示: 「担当者がいない、"決済"関連の期限切れ課題」
+    あなたの出力:
+    JSON
+    {
+    "project": null,
+    "reporter": null,
+    "assignee": "isEmpty()",
+    "issuetype": null,
+    "status": {
+        "operator": "not in",
+        "value": ["COMPLEAT", "Done", "Closed", "Resolved"]
+    },
+    "priority": null,
+    "text": "決済",
+    "duedate": {
+        "operator": "<",
+        "value": "now()"
+    },
+    "created": null
+    }
 
     """
 
-def get_user_prompt_generate_jql() -> str:
-    return """
-    
+class Condition(BaseModel):
+    operator: str
+    value: str | List[str]
 
-    """
+class JQLQuerySchema(BaseModel):
+    project: Optional[str] = None
+    reporter: Optional[str] = None
+    assignee: Optional[str] = None
+    issuetype: Optional[str] = None
+    status: Optional[Condition] = None
+    priority: Optional[Condition] = None
+    text: Optional[str] = None
+    duedate: Optional[Condition] = None
+    created: Optional[Condition] = None
+

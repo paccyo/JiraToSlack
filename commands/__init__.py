@@ -1,5 +1,5 @@
-from commands.jira.main import Command_Jira_Responce
-from commands.jira_get_tasks.main import Command_Jira_Get_Tasks_Responce
+from commands.jira.main import CommandJiraRepository
+from commands.jira_get_tasks.main import CommandJiraGetTasksRepository
 
 
 def register_commands(app):
@@ -9,7 +9,7 @@ def register_commands(app):
     @app.command("/jira")
     def handle_jira_command(ack, say):
         ack()
-        command_jira_repository = Command_Jira_Responce()
+        command_jira_repository = CommandJiraRepository()
         responce = command_jira_repository.execute()
         say(responce)
 
@@ -19,6 +19,6 @@ def register_commands(app):
         user_query = body["text"]
         say(f"user query: {user_query}")
         say("処理中...")
-        command_jira_get_tasks_repository = Command_Jira_Get_Tasks_Responce()
+        command_jira_get_tasks_repository = CommandJiraGetTasksRepository()
         responce = command_jira_get_tasks_repository.execute(body)
         say(responce)
