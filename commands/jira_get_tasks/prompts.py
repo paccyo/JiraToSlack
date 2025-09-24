@@ -30,13 +30,28 @@ def get_system_prompt_generate_jql() -> str:
     担当者 (assignee) / 報告者 (reporter):
     「私」「自分」など: "currentUser()"
     「担当者なし」「未割り当て」: "isEmpty()"
-    特定の名前（例: 「田中さん」）: "田中"
+    特定の人名（例: 「田中さん」）: "田中"
 
     ステータス (status):
-    「未COMPLEAT」「やるべきこと」などCOMPLEATしていない状態を指す場合、デフォルトで以下のオブジェクトを設定します。
-    {"operator": "not in", "value": ["COMPLEAT", "Done", "Closed", "Resolved"]}
-    「COMPLEAT済み」など、COMPLEATしている状態を指す場合は以下のようにします。
-    {"operator": "in", "value": ["COMPLEAT", "Done", "Closed", "Resolved"]}
+    以下のステータス名を認識し、ユーザーの入力と厳密に一致した場合はその値を設定します。
+    ・pending
+    ・To Do
+    ・IN_progress
+    ・REVIEWING
+    ・Abort
+    ・完了
+    「完了」「完了済み」など、完了した状態を指す場合は以下のようにします。
+    {"operator": "in", "value": ["完了"]}
+    未完了の状態を指す場合（例：「未完了」「未解決」）は、デフォルトで以下のオブジェクトを設定します。
+    {"operator": "not in", "value": ["完了"]}
+    「保留」「保留中」など、保留されている状態を指す場合は以下のようにします。
+    {"operator": "in", "value": ["pending"]}
+    「IN_progress」「進行している」など、進行中の状態を指す場合は以下のようにします。
+    {"operator": "in", "value": ["IN_progress"]}
+    「REVIEWING」「レビュー中」「レビュー待ち」など、レビューの状態を指す場合は以下のようにします。
+    {"operator": "in", "value": ["REVIEWING"]}
+    タスクのステータスに対して特に指定のない場合、以下のようにします。
+    {"operator": "in", "value": ["To Do", IN_progress]}
 
     期限 (duedate) / 作成日 (created):
     「今日」: {"operator": "<=", "value": "endOfDay()"}
@@ -56,75 +71,7 @@ def get_system_prompt_generate_jql() -> str:
 
     キーワード (text):
     「"〇〇"に関する」「"〇〇"を含む」: "〇〇"
-
-    # 出力例 (Examples)
-    例1
-    ユーザー指示: 「私が報告したタスク」
-    あなたの出力:
-    JSON
-    {
-    "project": null,
-    "reporter": "currentUser()",
-    "assignee": null,
-    "issuetype": "Task",
-    "status": {
-        "operator": "not in",
-        "value": ["COMPLEAT", "Done", "Closed", "Resolved"]
-    },
-    "priority": null,
-    "text": null,
-    "duedate": null,
-    "created": null
-    }
-
-    例2
-    ユーザー指示: 「今日が期限の、優先度が高いバグ」
-    あなたの出力:
-    JSON
-    {
-    "project": null,
-    "reporter": null,
-    "assignee": null,
-    "issuetype": "Bug",
-    "status": {
-        "operator": "not in",
-        "value": ["COMPLEAT", "Done", "Closed", "Resolved"]
-    },
-    "priority": {
-        "operator": ">=",
-        "value": "High"
-    },
-    "text": null,
-    "duedate": {
-        "operator": "<=",
-        "value": "endOfDay()"
-    },
-    "created": null
-    }
-
-    例3
-    ユーザー指示: 「担当者がいない、"決済"関連の期限切れ課題」
-    あなたの出力:
-    JSON
-    {
-    "project": null,
-    "reporter": null,
-    "assignee": "isEmpty()",
-    "issuetype": null,
-    "status": {
-        "operator": "not in",
-        "value": ["COMPLEAT", "Done", "Closed", "Resolved"]
-    },
-    "priority": null,
-    "text": "決済",
-    "duedate": {
-        "operator": "<",
-        "value": "now()"
-    },
-    "created": null
-    }
-
-    """
+"""
 
 class Condition(BaseModel):
     operator: str

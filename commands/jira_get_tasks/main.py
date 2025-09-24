@@ -1,6 +1,5 @@
-from prompts import get_system_prompt_generate_jql, JQLQuerySchema
-# from commands.jira_get_tasks.prompts import get_system_prompt_generate_jql,get_user_prompt_generate_jql
-from request_jql import RequestJqlRepository
+from commands.jira_get_tasks.prompts import get_system_prompt_generate_jql, JQLQuerySchema
+from commands.jira_get_tasks.request_jql import RequestJqlRepository
 
 import os
 import json
@@ -9,10 +8,7 @@ import re
 from google import genai
 from google.genai import types
 
-
-
-
-class CommandJiraGetTasksRepository:    
+class CommandJiraGetTasksRepository:
     
     def __init__(self):
         # 環境変数を取得
@@ -40,21 +36,73 @@ class CommandJiraGetTasksRepository:
             # return responce.text
             clean_json_str = re.search(r"\{.*\}", responce.text, re.DOTALL).group(0)
             
-            responce_result = json.loads(clean_json_str)
+            gemini_result = json.loads(clean_json_str)
 
             # return responce_result
             try:
+                # JQLリクエスト
                 request_jql_repository = RequestJqlRepository()
-                jql_query = request_jql_repository.build_jql_from_json(responce_result)
-                result = request_jql_repository.execute(jql_query)
+                jql_query = request_jql_repository.build_jql_from_json(gemini_result)
+                jira_results = request_jql_repository.execute(jql_query)
+                
+                responce = {}
 
-                return result
+                for jira_result in jira_results:
+                    block = self.format_jira_issue_for_slack(jira_result)
+                    responce[jira_result.key] = block
+
+                return responce
             
             except Exception as e:
                 return f"Request JQL error:{e}"
             
         except Exception as e:
             return f"An error occurred: {e}"
+        
+
+
+    def format_jira_issue_for_slack(self, issue):
+        # 課題のURLを取得
+        issue_url = issue.permalink()
+
+        # 担当者がいるかどうかを確認
+        if issue.fields.assignee:
+            assignee_name = issue.fields.assignee.displayName
+        else:
+            assignee_name = "未割り当て"
+
+        # ステータス名を取得
+        status_name = issue.fields.status.name
+
+        # Block KitのJSON構造を構築
+        blocks = [
+            {
+                "type": "divider" # 区切り線
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    # 課題の要約を太字にし、課題キーにURLをリンクさせる
+                    "text": f" *<{issue_url}|{issue.key}>: {issue.fields.summary}*"
+                }
+            },
+            {
+                "type": "context", # 補足情報セクション
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*ステータス*: {status_name}"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*担当者*: {assignee_name}"
+                    }
+                ]
+            }
+        ]
+        return blocks
+
         
 
 if __name__ == "__main__":
@@ -64,4 +112,4 @@ if __name__ == "__main__":
 
     repository = CommandJiraGetTasksRepository()
 
-    print(repository.execute(body={"text":"完了済のすべてのタスク"}))
+    print(repository.execute(body={"text":"今日が期限のタスク"}))
