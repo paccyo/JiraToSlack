@@ -692,17 +692,54 @@ def draw_png(
     sprints_n = max(1, sprints_n)
     sprint_gap = 2
     spr_total_w = focus_board_x1 - focus_board_x0
-    spr_seg_w = (spr_total_w - (sprints_n - 1) * sprint_gap) // sprints_n
+    # Precompute sprint total from data for ratio calc (avoid undefined total_cnt)
+    try:
+        _dtot = (data or {}).get("totals", {}) if isinstance(data, dict) else {}
+        sprint_total_data = int(_dtot.get("subtasks", 0))
+    except Exception:
+        sprint_total_data = 0
+    # Try to draw sprint width proportional to subtasks share (sprint vs project)
+    spr_ratio: Optional[float] = None
+    try:
+        kpi_data = (extras or {}).get("kpis", {}) if extras else {}
+        # current sprint subtasks total (prefer KPI, fallback to data)
+        if isinstance(kpi_data, dict):
+            sprint_total = int(kpi_data.get("sprintTotal") or sprint_total_data)
+        else:
+            sprint_total = sprint_total_data
+        proj_total = None
+        if extras and isinstance(extras.get("project_subtask_count"), dict):
+            proj_total = int(extras["project_subtask_count"].get("total") or 0)
+        if not proj_total:
+            proj_total = int(kpi_data.get("projectTotal") or 0) if isinstance(kpi_data, dict) else 0
+        if proj_total and proj_total > 0:
+            spr_ratio = max(0.0, min(1.0, float(sprint_total) / float(proj_total)))
+    except Exception:
+        spr_ratio = None
+
     sx = focus_board_x0
-    focus_s_idx = 0
     focus_s_x0 = sx
-    focus_s_x1 = sx + spr_seg_w
-    for i in range(sprints_n):
-        fill = col_sprint_focus if i == focus_s_idx else col_sprint_other
-        g.rectangle([sx, spr_y0 + 4, sx + spr_seg_w, spr_y1 - 4], fill=fill, outline=col_outline)
-        if i == focus_s_idx:
-            focus_s_x0, focus_s_x1 = sx, sx + spr_seg_w
-        sx += spr_seg_w + sprint_gap
+    focus_s_x1 = sx + spr_total_w
+    if spr_ratio is not None:
+        # Draw current sprint portion vs others (proportional)
+        cur_w = max(2, int(round(spr_total_w * spr_ratio)))
+        other_w = max(0, spr_total_w - cur_w)
+        g.rectangle([sx, spr_y0 + 4, sx + cur_w, spr_y1 - 4], fill=col_sprint_focus, outline=col_outline)
+        if other_w > 0:
+            g.rectangle([sx + cur_w, spr_y0 + 4, sx + cur_w + other_w, spr_y1 - 4], fill=col_sprint_other, outline=col_outline)
+        focus_s_x0, focus_s_x1 = sx, sx + cur_w
+    else:
+        # Fallback to equal segments when ratio is unknown
+        spr_seg_w = (spr_total_w - (sprints_n - 1) * sprint_gap) // sprints_n
+        focus_s_idx = 0
+        focus_s_x0 = sx
+        focus_s_x1 = sx + spr_seg_w
+        for i in range(sprints_n):
+            fill = col_sprint_focus if i == focus_s_idx else col_sprint_other
+            g.rectangle([sx, spr_y0 + 4, sx + spr_seg_w, spr_y1 - 4], fill=fill, outline=col_outline)
+            if i == focus_s_idx:
+                focus_s_x0, focus_s_x1 = sx, sx + spr_seg_w
+            sx += spr_seg_w + sprint_gap
 
     # Tasks row constrained to the focused sprint x-range
     parents = data.get("parents", [])
