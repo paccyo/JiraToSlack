@@ -104,7 +104,8 @@ def main() -> int:
         if code_i == 200 and data_i:
             try:
                 hist = ((data_i.get("changelog") or {}).get("histories") or [])
-                for h in hist:
+                # Process histories in reverse order to find the LATEST transition to Done status
+                for h in reversed(hist):
                     items = h.get("items") or []
                     for it in items:
                         if (it.get("field") == "status" and
@@ -113,7 +114,9 @@ def main() -> int:
                             if to_name:
                                 # If transitioned into a Done category status, mark date
                                 # Unfortunately statusCategory isn't in changelog items; accept any status that is Done now
-                                if to_name.lower() in {"done", "resolved", "fixed", "完成", "完了"}:
+                                # Exclude abort/cancel statuses as they are not true completion
+                                if (to_name.lower() in {"done", "resolved", "fixed", "完成", "完了", "compleat", "complete", "closed"} and
+                                    to_name.lower() not in {"abort", "aborted", "cancelled", "canceled"}):
                                     changed = parse_iso(h.get("created"))
                                     if changed:
                                         done_dt = changed

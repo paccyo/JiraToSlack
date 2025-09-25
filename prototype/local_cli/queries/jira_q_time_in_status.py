@@ -89,6 +89,10 @@ def main() -> int:
         if code_i != 200 or not data_i:
             continue
         histories = ((data_i.get("changelog") or {}).get("histories") or [])
+        
+        # 課題作成日時を取得
+        created_date = parse_iso((data_i.get("fields") or {}).get("created"))
+        
         # Build timeline of status with timestamps
         events: List[Tuple[datetime, str]] = []
         # initial: unknown until first status we see; we can derive current status at the end
@@ -103,11 +107,17 @@ def main() -> int:
                         events.append((created, str(name)))
         # Sort by time
         events.sort(key=lambda x: x[0])
-        # If we have no events, take current status as single bucket for the whole window (完了ステータスは除外)
+        
+        # If we have no events, take current status as single bucket for the window (完了ステータスは除外)
         if not events:
             cur = ((iss.get("fields") or {}).get("status") or {}).get("name") or "(unknown)"
             if not is_done_status(cur):
-                dur = max(0.0, (until - since).total_seconds())
+                # 課題作成日時とスプリント開始日時の遅い方から現在時刻まで計算
+                effective_start = max(since, created_date) if created_date else since
+                now = datetime.now(timezone.utc)
+                # 現在時刻がスプリント終了前の場合は現在時刻、それ以降の場合はスプリント終了時刻を使用
+                effective_end = min(now, until)
+                dur = max(0.0, (effective_end - effective_start).total_seconds())
                 total_by_status[cur] = total_by_status.get(cur, 0.0) + dur
                 per_issue.append({"key": ikey, "byStatus": {cur: dur}})
             else:
@@ -143,9 +153,11 @@ def main() -> int:
             prev_time = t
             prev_status = st
 
-        # tail from last change to until (完了ステータスは除外)
+        # tail from last change to current time or sprint end (完了ステータスは除外)
         if prev_time and prev_status and not is_done_status(prev_status):
-            tail = (until - max(prev_time, since)).total_seconds()
+            now = datetime.now(timezone.utc)
+            effective_end = min(now, until)
+            tail = (effective_end - max(prev_time, since)).total_seconds()
             if tail > 0:
                 by_status[prev_status] = by_status.get(prev_status, 0.0) + tail
 
