@@ -7,10 +7,10 @@
   "totals": {
     "parents": 6,
     "subtasks": 27,
-    "done": 21,
-    "notDone": 6
+    "done": 23,
+    "notDone": 4
   },
-  "doneRate": 0.7777777777777778,
+  "doneRate": 0.8518518518518519,
   "targetDoneRate": 0.8,
   "axis": "percent",
   "extrasAvailable": {

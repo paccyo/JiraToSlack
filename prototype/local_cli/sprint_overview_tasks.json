@@ -6,6 +6,75 @@
   },
   "parents": [
     {
+      "parentKey": "SCRUM-25",
+      "parentSummary": "ユースケース別のレポート作成",
+      "assignee": "福聖",
+      "subtasks": [
+        {
+          "key": "SCRUM-33",
+          "summary": "レポート作成の自動化スクリプト開発",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T10:26:54.837+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T11:37:26.470+0900"
+        },
+        {
+          "key": "SCRUM-35",
+          "summary": "ユースケースの要件定義",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T10:26:54.859+0900",
+          "startedAt": "2025-09-24T11:37:29.087+0900",
+          "completedAt": "2025-09-24T13:42:40.065+0900"
+        },
+        {
+          "key": "SCRUM-34",
+          "summary": "データ収集方法の決定",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T10:26:54.859+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-24T11:37:32.343+0900"
+        },
+        {
+          "key": "SCRUM-36",
+          "summary": "レポート内容のレビューと修正",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T10:26:54.862+0900",
+          "startedAt": "2025-09-24T11:37:41.023+0900",
+          "completedAt": "2025-09-24T13:42:49.512+0900"
+        },
+        {
+          "key": "SCRUM-37",
+          "summary": "レポートフォーマットの設計",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T10:26:54.875+0900",
+          "startedAt": "2025-09-24T11:37:37.818+0900",
+          "completedAt": "2025-09-24T13:42:46.501+0900"
+        }
+      ],
+      "doneCount": 5,
+      "totalSubtasks": 5
+    },
+    {
       "parentKey": "SCRUM-5",
       "parentSummary": "スプリント内の完了未完了タスクの件数取得",
       "assignee": "福聖",
@@ -31,7 +100,7 @@
           "assignee": "福聖",
           "typeName": "Subtask",
           "created": "2025-09-24T02:35:12.512+0900",
-          "startedAt": null,
+          "startedAt": "2025-09-24T07:55:13.089+0900",
           "completedAt": "2025-09-24T11:35:38.938+0900"
         },
         {
@@ -43,7 +112,7 @@
           "assignee": "福聖",
           "typeName": "Subtask",
           "created": "2025-09-24T02:35:12.518+0900",
-          "startedAt": null,
+          "startedAt": "2025-09-24T07:55:16.232+0900",
           "completedAt": "2025-09-24T11:35:41.175+0900"
         }
       ],
@@ -190,7 +259,7 @@
           "assignee": "福聖",
           "typeName": "Subtask",
           "created": "2025-09-24T10:26:37.168+0900",
-          "startedAt": null,
+          "startedAt": "2025-09-24T11:36:20.545+0900",
           "completedAt": null
         },
         {
@@ -202,7 +271,7 @@
           "assignee": "福聖",
           "typeName": "Subtask",
           "created": "2025-09-24T10:26:37.168+0900",
-          "startedAt": null,
+          "startedAt": "2025-09-24T11:36:23.879+0900",
           "completedAt": null
         },
         {
@@ -238,7 +307,7 @@
           "assignee": "福聖",
           "typeName": "Subtask",
           "created": "2025-09-24T10:26:37.918+0900",
-          "startedAt": null,
+          "startedAt": "2025-09-24T11:36:27.004+0900",
           "completedAt": null
         }
       ],
@@ -260,7 +329,7 @@
           "typeName": "Subtask",
           "created": "2025-09-24T13:44:23.966+0900",
           "startedAt": null,
-          "completedAt": "2025-09-24T13:44:32.539+0900"
+          "completedAt": "2025-09-24T13:44:32.565+0900"
         },
         {
           "key": "SCRUM-40",
@@ -272,7 +341,7 @@
           "typeName": "Subtask",
           "created": "2025-09-24T13:44:23.970+0900",
           "startedAt": null,
-          "completedAt": "2025-09-24T13:44:38.425+0900"
+          "completedAt": "2025-09-24T13:44:38.450+0900"
         },
         {
           "key": "SCRUM-41",
@@ -283,7 +352,7 @@
           "assignee": "sakiya sumida",
           "typeName": "Subtask",
           "created": "2025-09-24T13:44:23.988+0900",
-          "startedAt": null,
+          "startedAt": "2025-09-24T13:44:45.036+0900",
           "completedAt": null
         },
         {
@@ -296,7 +365,7 @@
           "typeName": "Subtask",
           "created": "2025-09-24T13:44:23.990+0900",
           "startedAt": null,
-          "completedAt": "2025-09-24T13:44:51.494+0900"
+          "completedAt": "2025-09-24T13:44:51.514+0900"
         },
         {
           "key": "SCRUM-43",
@@ -308,86 +377,17 @@
           "typeName": "Subtask",
           "created": "2025-09-24T13:44:24.024+0900",
           "startedAt": null,
-          "completedAt": "2025-09-24T13:44:57.028+0900"
+          "completedAt": "2025-09-24T13:44:57.053+0900"
         }
       ],
       "doneCount": 4,
-      "totalSubtasks": 5
-    },
-    {
-      "parentKey": "SCRUM-25",
-      "parentSummary": "ユースケース別のレポート作成",
-      "assignee": "福聖",
-      "subtasks": [
-        {
-          "key": "SCRUM-33",
-          "summary": "レポート作成の自動化スクリプト開発",
-          "status": "完了",
-          "done": true,
-          "storyPoints": 1.0,
-          "assignee": "福聖",
-          "typeName": "Subtask",
-          "created": "2025-09-24T10:26:54.837+0900",
-          "startedAt": null,
-          "completedAt": "2025-09-24T11:37:26.470+0900"
-        },
-        {
-          "key": "SCRUM-35",
-          "summary": "ユースケースの要件定義",
-          "status": "IN_progress",
-          "done": false,
-          "storyPoints": 1.0,
-          "assignee": "福聖",
-          "typeName": "Subtask",
-          "created": "2025-09-24T10:26:54.859+0900",
-          "startedAt": null,
-          "completedAt": null
-        },
-        {
-          "key": "SCRUM-34",
-          "summary": "データ収集方法の決定",
-          "status": "完了",
-          "done": true,
-          "storyPoints": 1.0,
-          "assignee": "福聖",
-          "typeName": "Subtask",
-          "created": "2025-09-24T10:26:54.859+0900",
-          "startedAt": null,
-          "completedAt": "2025-09-24T11:37:32.343+0900"
-        },
-        {
-          "key": "SCRUM-36",
-          "summary": "レポート内容のレビューと修正",
-          "status": "IN_progress",
-          "done": false,
-          "storyPoints": 1.0,
-          "assignee": "福聖",
-          "typeName": "Subtask",
-          "created": "2025-09-24T10:26:54.862+0900",
-          "startedAt": null,
-          "completedAt": null
-        },
-        {
-          "key": "SCRUM-37",
-          "summary": "レポートフォーマットの設計",
-          "status": "完了",
-          "done": true,
-          "storyPoints": 1.0,
-          "assignee": "福聖",
-          "typeName": "Subtask",
-          "created": "2025-09-24T10:26:54.875+0900",
-          "startedAt": null,
-          "completedAt": "2025-09-24T13:42:46.483+0900"
-        }
-      ],
-      "doneCount": 3,
       "totalSubtasks": 5
     }
   ],
   "totals": {
     "parents": 6,
     "subtasks": 27,
-    "done": 21,
-    "notDone": 6
+    "done": 23,
+    "notDone": 4
   }
 }

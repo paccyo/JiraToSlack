@@ -310,10 +310,48 @@ def agile_list_issues_in_sprint(
     return 200, all_issues, ""
 
 
+def _normalize_status_name(s: str) -> str:
+    """Normalize a Jira status name for robust matching.
+    - lowercases
+    - replaces spaces/hyphens with underscores
+    - maps common variants and Japanese synonyms to canonical keys
+    """
+    ss = (s or "").strip().lower()
+    if not ss:
+        return ss
+    ss = ss.replace(" ", "_").replace("-", "_")
+    # canonicalization map
+    synonyms = {
+        # in progress variants
+        "in_progress": "in_progress",
+        "inprogress": "in_progress",
+        "doing": "in_progress",
+        "進行中": "in_progress",
+        "作業中": "in_progress",
+        "対応中": "in_progress",
+        # review/qa
+        "in_review": "in_review",
+        "review": "in_review",
+        "レビュー": "in_review",
+        "qa": "qa",
+        # todo/new
+        "to_do": "to_do",
+        "todo": "to_do",
+        "new": "to_do",
+        "未着手": "to_do",
+        # done/closed/resolved
+        "done": "done",
+        "closed": "done",
+        "resolved": "done",
+        "完了": "done",
+    }
+    return synonyms.get(ss, ss)
+
+
 def _extract_times_from_changelog(changelog: Dict[str, Any], start_names: List[str], done_names: List[str]) -> Tuple[Optional[str], Optional[str]]:
     """Return (startedAt, completedAt) based on first status transition into start_names and into done_names.
     Times are ISO strings from history.created. If not found, returns (None, None).
-    """
+    Uses normalized status names for robust matching (spaces/hyphens/case/Japanese)."""
     if not changelog:
         return None, None
     histories = changelog.get("histories") or []
@@ -324,15 +362,15 @@ def _extract_times_from_changelog(changelog: Dict[str, Any], start_names: List[s
         pass
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
-    sset = {s.lower() for s in start_names}
-    dset = {s.lower() for s in done_names}
+    sset = {_normalize_status_name(s) for s in start_names}
+    dset = {_normalize_status_name(s) for s in done_names}
     for h in histories:
         items = h.get("items") or []
         for it in items:
             if (it.get("field") or "").lower() != "status":
                 continue
             to_name = str(it.get("toString") or "").strip()
-            lto = to_name.lower()
+            lto = _normalize_status_name(to_name)
             ts = h.get("created")  # ISO-8601 string
             if not started_at and lto in sset:
                 started_at = ts
@@ -462,7 +500,7 @@ def list_and_print_subtasks(
     results: List[Dict[str, Any]] = []
     # env knobs
     include_changelog = (os.getenv("INCLUDE_CHANGELOG", "1").lower() in ("1", "true", "yes"))
-    start_names = [s.strip() for s in os.getenv("START_STATUS_NAMES", "In Progress,In Review,Doing").split(",") if s.strip()]
+    start_names = [s.strip() for s in os.getenv("START_STATUS_NAMES", "In Progress,IN_progress,In Review,Doing,進行中,作業中,対応中").split(",") if s.strip()]
     done_names = [s.strip() for s in os.getenv("DONE_STATUS_NAMES", "Done,Closed,Resolved").split(",") if s.strip()]
 
     for issue in issues:
