@@ -6,11 +6,9 @@ from statistics import mean
 from pathlib import Path
 from typing import Any, Dict, List
 
-# Use fully qualified import so tests can monkeypatch consistently
 try:
     from prototype.local_cli.lib.jira_client import JiraClient  # type: ignore
 except ModuleNotFoundError:
-    # When executed as a script by path, ensure parent is on sys.path
     sys.path.append(str(Path(__file__).resolve().parents[1]))
     from lib.jira_client import JiraClient  # type: ignore
 

@@ -336,36 +336,6 @@ def try_load_font(size: int) -> ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-def norm_status_display(name: Optional[str]) -> str:
-    """
-    ヒューマンフレンドリなステータス表示へ正規化する。
-    代表例:
-    - To Do, todo, to_do -> 未着手
-    - In Progress, IN_progress, in-progress -> 進行中
-    - In Review, Review -> レビュー
-    - Done -> 完了
-    その他は元の値を返す（None/空は空文字）。
-    """
-    s = str(name or "").strip()
-    if not s:
-        return ""
-    key = s.lower().replace(" ", "_").replace("-", "_")
-    mapping = {
-        "to_do": "未着手",
-        "todo": "未着手",
-        "to": "未着手",  # safety
-        "in_progress": "進行中",
-        "inprogress": "進行中",
-        "progress": "進行中",
-        "in_review": "レビュー",
-        "review": "レビュー",
-        "qa": "QA",
-        "done": "完了",
-        "blocked": "ブロック",
-    }
-    return mapping.get(key, s)
-
-
 def fmt_date(dt_str: Optional[str]) -> Optional[str]:
     if not dt_str:
         return None
@@ -404,7 +374,7 @@ def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Opt
             retries = int(os.getenv("GEMINI_RETRIES", "2"))
         except Exception:
             retries = 2
-        temp = float(os.getenv("GEMINI_TEMPERATURE", "0.0"))
+        temp = float(os.getenv("GEMINI_TEMPERATURE", "0.1"))
         top_p = float(os.getenv("GEMINI_TOP_P", "0.9"))
 
         # Use REST transport to avoid gRPC plugin metadata issues
@@ -453,15 +423,11 @@ def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Opt
             - 評価は context.evaluation_label をそのまま使用（順調/やや注意/要警戒）。独自しきい値は使わない。
             - What: スプリント名と期間、合計/完了件数、完了率。（例: data: sprint_total=, sprint_done=, done_percent=）
             - So what: 目標達成状況（target_percent と tolerance_percent のみ基準）。90% 等の別基準は使わない。スケジュールは forecast_status（遅延予測/間に合う予測）を優先。
-            - Next: 具体アクション（高優先度未着手の割当/レビュー増員など）。対象や件数を明記。
 
-            2. 注目すべき予兆とリスク
-            - 将来問題になりそうな兆候／既存のリスクを根拠とともに列挙。
+            2. 注目すべきデータと洞察
+            - 問題があるデータを根拠とともに列挙、根本原因を推測・分析（専門家視点）。端的に3行程度でまとめる。
 
-            3. 深い洞察と分析
-            - 予兆やリスクの背景にある根本原因を推測・分析（専門家視点）。
-
-            4. 推奨アクションプラン
+            3. 推奨アクションプラン
             - 誰が／何を／いつまでに の形式で3項目、即実行可能なアクションを提案。
             """
         )
@@ -510,9 +476,9 @@ def maybe_gemini_justify_evidences(
         temp = float(os.getenv("GEMINI_TEMPERATURE", "0.2"))
         top_p = float(os.getenv("GEMINI_TOP_P", "0.9"))
         try:
-            max_chars = int(os.getenv("EVIDENCE_REASON_MAX_CHARS", "30"))
+            max_chars = int(os.getenv("EVIDENCE_REASON_MAX_CHARS", "38"))
         except Exception:
-            max_chars = 30
+            max_chars = 38
 
         # 生成に必要な最小情報を構築
         items = []
@@ -1051,6 +1017,8 @@ def draw_png(
     draw_burndown_sparkline(bd_box_x0, bd_box_y0, bd_box_w, bd_box_h, bd_data)
     # mini velocity chart (reserved_h is dynamic based on KPI text height)
     def draw_velocity_mini(x0: int, y0: int, w: int, h: int, vel: Optional[Dict[str, Any]], reserved_h: int) -> None:
+        # Apply adapter to handle both new and old velocity formats
+        vel = adapt_velocity_data(vel)
         if not vel:
             g.rectangle([x0, y0, x0 + w, y0 + h], outline=col_outline, fill=(250, 250, 250))
             g.text((x0 + 8, y0 + 8), "データなし", font=font_sm, fill=(120, 120, 120))
@@ -1099,53 +1067,29 @@ def draw_png(
         tgt_pct = int(round(100 * target_done_rate))
         tx = velmini_box_x0 + 10
         ty = bd_box_y0 + 6
-        # Evaluate progress with tolerance (near-target treated as green)
-        try:
-            progress_tolerance = float(os.getenv("PROGRESS_TOLERANCE", "0.03"))
-        except Exception:
-            progress_tolerance = 0.03
-        done_rate_hdr = (sprint_done / max(1, sprint_total))
-        diff = done_rate_hdr - target_done_rate
-        if diff >= -progress_tolerance:
-            eval_label = "順調"
-            eval_color = col_ok
-        elif done_rate_hdr >= 0.5:
-            eval_label = "やや注意"
-            eval_color = col_warn
-        else:
-            eval_label = "要警戒"
-            eval_color = col_danger
-        # expose evaluation to extras for AI context later
-        try:
-            if isinstance(extras, dict):
-                extras.setdefault("kpis", {})
-                extras["kpis"]["evaluationLabel"] = eval_label
-        except Exception:
-            pass
-        label = f"進捗 {done_pct}% / 目標 {tgt_pct}% ({eval_label})"
+        label = f"進捗 {done_pct}% / 目標 {tgt_pct}%"
         max_text_w = velmini_box_w - 18
         # Pre-fit fonts to compute reserved height for chart
         f1 = fit_font_for_width(label, max_text_w, font_lg)
-        line2 = f"プロジェクト:{proj_total} | スプリント(小タスク):{sprint_total} 完了:{sprint_done}"
-        f2 = fit_font_for_width(line2, max_text_w, font_sm)
-        bench_line = f"基準: 目標 {tgt_pct}% / 許容差 ±{int(progress_tolerance*100)}%"
-        f3 = fit_font_for_width(bench_line, max_text_w, font_sm)
+        f2 = fit_font_for_width(
+            f"プロジェクト:{proj_total} | スプリント(小タスク):{sprint_total} 完了:{sprint_done}",
+            max_text_w,
+            font_sm,
+        )
         h1 = text_wh(label, f1)[1]
+        line2 = f"プロジェクト:{proj_total} | スプリント(小タスク):{sprint_total} 完了:{sprint_done}"
         h2 = text_wh(line2, f2)[1]
-        h3 = text_wh(bench_line, f3)[1]
         # Dedicated KPI panel above mini-velocity
-        reserved_h = h1 + 3 + h2 + 2 + h3 + 10  # inner paddings
+        reserved_h = h1 + 4 + h2 + 10  # inner paddings
         # Ensure we leave room for the mini velocity chart
         min_vel_h = 40
         if reserved_h > bd_box_h - min_vel_h:
             reserved_h = max(28, bd_box_h - min_vel_h)
         # Draw KPI panel box
         g.rectangle([velmini_box_x0, bd_box_y0, velmini_box_x0 + velmini_box_w, bd_box_y0 + reserved_h], outline=col_outline, fill=(255, 255, 255))
-        used_font = draw_text_fit(label, tx, ty, max_text_w, font_lg, eval_color)
+        used_font = draw_text_fit(label, tx, ty, max_text_w, font_lg, (col_danger if done_pct < tgt_pct else col_ok))
         ty2 = ty + text_wh(label, used_font)[1] + 4
         draw_text_fit(line2, tx, ty2, max_text_w, font_sm, col_text)
-        ty3 = ty2 + text_wh(line2, f2)[1] + 2
-        draw_text_fit(bench_line, tx, ty3, max_text_w, font_sm, (100, 100, 100))
         # Draw mini velocity below KPI panel
         mv_y0 = bd_box_y0 + reserved_h + 6
         mv_h = max(min_vel_h, bd_box_h - reserved_h - 6)
@@ -1179,8 +1123,40 @@ def draw_png(
     # Push left column below annotation if needed
     left_col_y0 = max(grid_y0 + 40, annotation_bottom + 8)
     left_col_w = proj_x1 - proj_x0
+    
+    # Adapter function to handle both old and new velocity data formats
+    def adapt_velocity_data(vel: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Convert new velocity format to old format for backward compatibility."""
+        if not vel:
+            return None
+        
+        # If already in old format, return as-is
+        if "points" in vel and "avgPoints" in vel:
+            return vel
+        
+        # Convert new format to old format
+        if "history" in vel and "avg" in vel:
+            points = []
+            for h in vel.get("history", []):
+                points.append({
+                    "sprintId": h.get("id"),
+                    "sprintName": h.get("name"),
+                    "points": h.get("points", 0.0)
+                })
+            
+            return {
+                "board": vel.get("board"),
+                "fieldId": vel.get("fieldId", "customfield_10016"),  # fallback
+                "points": points,
+                "avgPoints": vel.get("avg", 0.0)
+            }
+        
+        return vel
+    
     # Velocity bars
     def draw_velocity(x0: int, y0: int, w: int, h: int, vel: Optional[Dict[str, Any]]) -> int:
+        # Apply adapter to handle both new and old velocity formats
+        vel = adapt_velocity_data(vel)
         if not vel:
             return y0
         pts = vel.get("points") or []
@@ -1429,128 +1405,54 @@ def draw_png(
         rows = wl.get("byAssignee") or []
         if not rows:
             return y0
-        g.text((x0, y0 - 18), "担当者別ワークロード（未完了件数）", font=font_md, fill=col_text)
+        g.text((x0, y0 - 18), "担当者別ワークロード（未完了）", font=font_md, fill=col_text)
         pad = 8
         topn = min(8, len(rows))
         rows = sorted(rows, key=lambda r: -int(r.get("notDone") or 0))[:topn]
-        vals = [int(r.get("notDone") or 0) for r in rows]
-        maxv = max(vals + [1])
-        # Ideal/average thresholds
-        try:
-            ideal_max = float(os.getenv("WORKLOAD_IDEAL_MAX", ""))
-            if ideal_max <= 0:
-                raise Exception()
-        except Exception:
-            ideal_max = max(1.0, (sum(vals) / max(1, len(vals))))
-        warn_thr = ideal_max * 1.1
-        danger_thr = ideal_max * 1.5
+        maxv = max([int(r.get("notDone") or 0) for r in rows] + [1])
         bar_h = max(14, (h - 2 * pad - (topn - 1) * 6) // max(1, topn))
         y = y0
         for r in rows:
             name = str(r.get("name"))
             v = int(r.get("notDone") or 0)
             bw = int((w - 2 * pad) * (v / maxv))
-            # tri-color by thresholds
-            if v > danger_thr:
-                fillc = col_danger
-            elif v > warn_thr:
-                fillc = col_warn
-            else:
-                fillc = col_ok
-            g.rectangle([x0, y, x0 + bw, y + bar_h], fill=fillc, outline=col_outline)
-            g.text((x0 + 6, y + 2), f"{name} 未完了 {v}件", font=font_sm, fill=(20, 20, 20))
+            g.rectangle([x0, y, x0 + bw, y + bar_h], fill=(255, 180, 70), outline=col_outline)
+            g.text((x0 + 6, y + 2), f"{name} ({v})", font=font_sm, fill=(20, 20, 20))
             y += bar_h + 6
-        # Legend: average/ideal
-        leg = f"目安: ~{int(round(ideal_max))}件/人 (警告>{int(round(warn_thr))}, 危険>{int(round(danger_thr))})"
-        g.text((x0, y + 2), leg, font=font_sm, fill=(100, 100, 100))
-        return y + text_wh(leg, font_sm)[1] + 6
+        return y
 
     wl_h = 220
     wl_data = (extras or {}).get("workload") if extras else None
     wl_y1 = draw_workload(right_x0, kpi_y1 + 20, right_w, wl_h, wl_data)
-
-    # Action suggestions panel (below workload)
-    def draw_actions(x0: int, y0: int, w: int, h: int, ctx: Dict[str, Any]) -> int:
-        g.text((x0, y0 - 18), "推奨アクション", font=font_md, fill=col_text)
-        g.rectangle([x0, y0, x0 + w, y0 + h], outline=col_outline, fill=(250, 250, 250))
-        lines: List[str] = []
-        hp = int(((ctx.get("risks") or {}).get("highPriorityTodo", 0)))
-        od = int(((ctx.get("risks") or {}).get("overdue", 0)))
-        ds = int(((ctx.get("risks") or {}).get("dueSoon", 0)))
-        if done_rate < target_done_rate:
-            lines.append("- レビュー担当の増員/並列化でスループット改善")
-        if hp:
-            lines.append(f"- 高優先度未着手 {hp}件に即時担当割当")
-        if od:
-            lines.append(f"- 期限超過 {od}件のエスカレーション")
-        if ds:
-            lines.append(f"- 期限接近 {ds}件の優先順位再確認")
-        if not lines:
-            lines.append("- 特筆すべきアクションなし")
-        y = y0 + 8
-        for ln in lines[:5]:
-            g.text((x0 + 8, y), ln, font=font_sm, fill=col_text)
-            y += 18
-        return y0 + h
-
-    actions_h = 96
-    wl_y2 = draw_actions(right_x0, wl_y1 + 16, right_w, actions_h, extras or {})
+    wl_y2 = wl_y1 + wl_h
 
     # Footer: Evidence table
     def draw_evidence(x0: int, y0: int, w: int, h: int, ev: Optional[List[Dict[str, Any]]]) -> None:
-        """重要エビデンス表を描画する。
-        - 列順: 課題 | 担当者 | ステータス | 種別 | アクション | 重要な理由 | リンク
-        - アクション列は左寄せかつ幅広めにしてテキストの見切れを軽減
-        - インデントはスペースのみで統一
-        """
         g.text((x0, y0 - 18), "重要エビデンス（Top）", font=font_md, fill=col_text)
         if not ev:
             return
-
-        # 幅配分（合計=1.00）
-        # 課題21%/担当10%/ステータス10%/種別12%/アクション21%/重要な理由18%/リンク8%
-        col_w = [
-            int(w * 0.21),  # 課題
-            int(w * 0.10),  # 担当者
-            int(w * 0.10),  # ステータス
-            int(w * 0.12),  # 種別
-            int(w * 0.21),  # アクション
-            int(w * 0.18),  # 重要な理由
-            int(w * 0.08),  # リンク
-        ]
-        headers = ["課題", "担当者", "ステータス", "種別", "アクション", "重要な理由", "リンク"]
-
-        # 外枠
+        # header
+        # 課題列にサマリーも併記するため幅を広げる
+        col_w = [int(w*0.28), int(w*0.14), int(w*0.14), int(w*0.34), int(w*0.10)]
+        headers = ["課題", "担当者", "ステータス", "重要な理由", "リンク"]
+        cx = x0
+        y = y0
         g.rectangle([x0, y0, x0 + w, y0 + h], outline=col_outline, fill=(250, 250, 250))
-
-        # ヘッダー行
-        y_row = y0 + 6
+        # header row
+        y_row = y + 6
         cx = x0 + 8
         for i, head in enumerate(headers):
             g.text((cx, y_row), head, font=font_sm, fill=col_text)
             cx += col_w[i]
         y_row += 20
-
-        # データ行
+        # rows
         for row in ev:
             cx = x0 + 8
             key_summary = str(row.get("key") or "")
             summ = str(row.get("summary") or "").strip()
             if summ:
                 key_summary = f"{key_summary} {summ}"
-            # human-friendly display
-            disp_assignee = (str(row.get("assignee") or "").strip() or "未割当")
-            disp_status = norm_status_display(row.get("status"))
-            # 列順に合わせて値を構成（アクションを理由より左に）
-            vals = [
-                key_summary,
-                disp_assignee,
-                disp_status,
-                row.get("type"),
-                row.get("action"),
-                row.get("why"),
-                row.get("link"),
-            ]
+            vals = [key_summary, row.get("assignee"), row.get("status"), row.get("why"), row.get("link")]
             for i, val in enumerate(vals):
                 cell_w = col_w[i] - 10
                 txt = trim_to_width(str(val or ""), cell_w, font_sm)
@@ -1603,27 +1505,31 @@ def draw_png(
         pass
     # Build context for Gemini summary
     risks_data = (extras or {}).get("risks", {}) if extras else {}
-    # pass KPI evaluation label and tolerance to ensure AI aligns with UI evaluation
-    try:
-        kpi_ctx = (extras or {}).get("kpis", {}) if extras else {}
-        eval_label_ctx = kpi_ctx.get("evaluationLabel")
-    except Exception:
-        eval_label_ctx = None
-    try:
-        progress_tolerance = float(os.getenv("PROGRESS_TOLERANCE", "0.03"))
-    except Exception:
-        progress_tolerance = 0.03
+    # Action recommendations based on data
+    action_suggestions = []
+    hp = int(risks_data.get("highPriorityTodo", 0))
+    od = int(risks_data.get("overdue", 0))
+    ds = int(risks_data.get("dueSoon", 0))
+    if done_rate < target_done_rate:
+        action_suggestions.append("レビュー担当の増員/並列化でスループット改善")
+    if hp > 0:
+        action_suggestions.append(f"高優先度未着手 {hp}件に即時担当割当")
+    if od > 0:
+        action_suggestions.append(f"期限超過 {od}件のエスカレーション")
+    if ds > 0:
+        action_suggestions.append(f"期限接近 {ds}件の優先順位再確認")
+    
     context_for_ai = {
         "sprint_label": sprint_label,
         "sprint_total": sprint_total,
         "sprint_done": sprint_done,
+        "done_percent": round(done_rate * 100, 1),
         "target_percent": int(target_done_rate * 100),
-        "tolerance_percent": int(progress_tolerance * 100),
-        "evaluation_label": eval_label_ctx,
         "review_avg_days": review_avg,
         "overdue": int(risks_data.get("overdue", 0)),
         "due_soon": int(risks_data.get("dueSoon", 0)),
         "high_priority_unstarted": int(risks_data.get("highPriorityTodo", 0)),
+        "suggested_actions": action_suggestions,
         "top_evidence": (extras or {}).get("evidence", []) or [],
     }
     raw_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
@@ -1659,22 +1565,11 @@ def draw_png(
                 print("- AI要約: ライブラリ未導入 (google-generativeai)")
     # Image caption remains deterministic and data-driven; AI full text goes to markdown
     what = f"What: {sprint_label} — 小タスク {total_cnt}件, 完了 {done_cnt} ({int((done_cnt/max(1,total_cnt))*100)}%). (data: sprint_subtasks_total={total_cnt}, sprint_subtasks_done={done_cnt})"
-    # Apply tolerance to textual evaluation to stay consistent with KPI color/label
-    try:
-        _tol = float(os.getenv("PROGRESS_TOLERANCE", "0.03"))
-    except Exception:
-        _tol = 0.03
-    if done_rate < (target_done_rate - _tol):
+    if done_rate < target_done_rate:
         if review_avg is not None:
             sowhat = f"So what: 目標{int(target_done_rate*100)}%未達、レビュー滞留 (data: time_in_status[Review].avg={review_avg:.1f}d)"
         else:
             sowhat = f"So what: 目標{int(target_done_rate*100)}%未達"
-    elif done_rate < target_done_rate:
-        # within tolerance band but below target
-        if review_avg is not None:
-            sowhat = f"So what: 目標±許容差内（ほぼ達成）、レビュー状況に留意 (data: time_in_status[Review].avg={review_avg:.1f}d)"
-        else:
-            sowhat = "So what: 目標±許容差内（ほぼ達成）"
     else:
         sowhat = "So what: ベロシティ安定、計画通り"
     hp = int(risks_data.get("highPriorityTodo", 0))
@@ -1829,7 +1724,8 @@ def main() -> int:
         if n_sprints:
             vel_args += ["--n", n_sprints]
         extras["velocity"] = get_json_from_script_args(str(base_dir / "queries" / "jira_q_velocity_history.py"), vel_args)
-    except Exception:
+    except Exception as e:
+        print(f"Error getting velocity data: {e}")
         extras["velocity"] = None
     try:
         # B2. Project sprint count (all states)
@@ -1959,7 +1855,7 @@ def main() -> int:
             by = row.get("byStatus") or {}
             days = sum(float(v) for v in by.values()) / (1.0 if unit == "days" else 24.0)
             ev_list.append({"key": key, "days": days})
-        # sort and take top N (initially by longest stay)
+        # sort and take top N
         ev_list = [e for e in ev_list if e.get("key")]
         ev_list.sort(key=lambda r: -float(r.get("days") or 0.0))
         topn = int(os.getenv("EVIDENCE_TOP_N", "5"))
@@ -1982,7 +1878,7 @@ def main() -> int:
                         "priority": ((flds.get("priority") or {}).get("name") or ""),
                         "duedate": flds.get("duedate") or "",
                     }
-            # attach status, assignee, why, action and link
+            # attach status, assignee, why and link
             dom = JIRA_DOMAIN.rstrip("/")
             for e in ev_list:
                 k = e.get("key")
@@ -2010,67 +1906,8 @@ def main() -> int:
                     why.append("high priority")
                 if float(e.get("days") or 0) >= 5.0:
                     why.append("long stay")
-                # derive evidence type
-                ev_type = "注目"
-                wl = " ".join(why).lower()
-                if "overdue" in wl:
-                    ev_type = "期限超過"
-                elif "due soon" in wl:
-                    ev_type = "期限間近"
-                elif "high priority" in wl and (status := (e.get("status") or "").lower()).startswith("to do"):
-                    ev_type = "高優先度未着手"
-                elif "long stay" in wl:
-                    ev_type = "長期滞留"
-                elif not (e.get("assignee") or "").strip():
-                    ev_type = "担当未割当"
-                e["type"] = ev_type
-                why_text = ", ".join(why)
-                if why_text:
-                    e["why"] = f"【{ev_type}】{why_text}"
-                else:
-                    e["why"] = f"【{ev_type}】"
-                # action heuristic (who/what/when)
-                try:
-                    act = []
-                    who = e.get("assignee") or "担当未割当"
-                    # when
-                    when = None
-                    dd = det.get("duedate") or ""
-                    if dd:
-                        when = dd.replace("-", "/")
-                    status = (e.get("status") or "").strip()
-                    if "overdue" in e["why"]:
-                        what = "期限超過の解消"
-                    elif "due soon" in e["why"]:
-                        what = "期限前の対応"
-                    elif status.lower() in ("to do", "todo") or status.lower().startswith("to do"):
-                        what = "着手開始"
-                    elif status.lower() in ("in progress", "in_progress", "inprogress", "進行中", "作業中"):
-                        what = "作業の継続/ブロッカー排除"
-                    else:
-                        what = "進捗確認/次アクション定義"
-                    # build action text
-                    if when:
-                        act_text = f"{who}: {what}（期限 {when}）"
-                    else:
-                        act_text = f"{who}: {what}"
-                    e["action"] = act_text
-                except Exception:
-                    e["action"] = e.get("assignee") or ""
+                e["why"] = ", ".join(why)
                 e["link"] = f"{dom}/browse/{k}"
-            # sort by urgency: overdue > due soon > high priority To Do > long stay > unassigned > others, then days desc
-            def _urgency_tuple(row: Dict[str, Any]) -> tuple:
-                why = str(row.get("why", "")).lower()
-                status = str(row.get("status", "")).lower()
-                assignee = str(row.get("assignee", "")).strip()
-                overdue = 0 if "overdue" in why else 1
-                due_soon = 0 if "due soon" in why else 1
-                hp_todo = 0 if ("high priority" in why and (status.startswith("to do") or status == "to do")) else 1
-                long_stay = 0 if "long stay" in why else 1
-                unassigned = 0 if not assignee else 1
-                days_neg = -float(row.get("days") or 0.0)
-                return (overdue, due_soon, hp_todo, long_stay, unassigned, days_neg)
-            ev_list.sort(key=_urgency_tuple)
         # Optionally enhance 'why' with Gemini (one-liner) while keeping safe fallback
         try:
             raw_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
@@ -2114,11 +1951,20 @@ def main() -> int:
             vel = extras.get("velocity")
             if isinstance(vel, dict):
                 try:
-                    pts = vel.get("points") or []
-                    tail = [float(p.get("points") or 0.0) for p in pts[-3:]]
-                    print(f"- Velocity: avg={vel.get('avgPoints')}, sprints={len(pts)}, last={tail}")
-                except Exception:
-                    print("- Velocity: 取得失敗またはデータなし")
+                    # Handle new velocity format directly for display
+                    if "history" in vel:
+                        # New format: convert for display
+                        history = vel.get("history", [])
+                        avg_points = vel.get("avg", 0.0)
+                        tail = [float(h.get("points", 0.0)) for h in history[-3:]]
+                        print(f"- Velocity: avg={avg_points}, sprints={len(history)}, last={tail}")
+                    else:
+                        # Old format: use directly
+                        pts = vel.get("points") or []
+                        tail = [float(p.get("points") or 0.0) for p in pts[-3:]]
+                        print(f"- Velocity: avg={vel.get('avgPoints')}, sprints={len(pts)}, last={tail}")
+                except Exception as e:
+                    print(f"- Velocity: 取得失敗またはデータなし ({e})")
             else:
                 print("- Velocity: データなし")
             # Status counts
@@ -2261,22 +2107,11 @@ def main() -> int:
         md = []
         md.append(f"## 要約 | {ts}")
         md.append(f"What: {sprint_label} — {sprint_total} tasks, Done {sprint_done} ({int((sprint_done/max(1,sprint_total))*100)}%). (data: sprint_total={sprint_total}, sprint_done={sprint_done})")
-        # apply tolerance to So what in markdown as well
-        try:
-            _tol = float(os.getenv("PROGRESS_TOLERANCE", "0.03"))
-        except Exception:
-            _tol = 0.03
-        _rate = (sprint_done / max(1, sprint_total))
-        if _rate < (target_done_rate - _tol):
+        if (sprint_done / max(1, sprint_total)) < target_done_rate:
             if review_avg is not None:
                 md.append(f"So what: 目標{target_pct}%未達、レビュー滞留 (data: time_in_status[Review].avg={review_avg:.1f}d)")
             else:
                 md.append(f"So what: 目標{target_pct}%未達")
-        elif _rate < target_done_rate:
-            if review_avg is not None:
-                md.append(f"So what: 目標±許容差内（ほぼ達成）、レビュー状況に留意 (data: time_in_status[Review].avg={review_avg:.1f}d)")
-            else:
-                md.append("So what: 目標±許容差内（ほぼ達成）")
         else:
             md.append("So what: 目標達成ペース")
         md.append(f"Next: 高優先度未完了{hp_cnt}件の即時割当、レビュー担当の増員検討")
@@ -2306,11 +2141,7 @@ def main() -> int:
                 ks = f"{_k} {_s}"
             else:
                 ks = _k
-            disp_status = norm_status_display(e.get('status'))
-            disp_assignee = (str(e.get('assignee') or '').strip() or '未割当')
-            md.append(
-                f"- {ks} | {disp_status} | {e.get('days'):.1f}d | type: {e.get('type','')} | assignee: {disp_assignee} | why: {e.get('why','')} | action: {e.get('action','')} | {e.get('link')}"
-            )
+            md.append(f"- {ks} | {e.get('status')} | {e.get('days'):.1f}d | assignee: {e.get('assignee','')} | why: {e.get('why','')} | {e.get('link')}")
         # Short actions
         md.append("")
         md.append("## 短期アクション")

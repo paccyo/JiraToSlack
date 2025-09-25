@@ -1,16 +1,16 @@
 {
   "sprint": {
-    "name": "SCRUM スプリント 1",
-    "startDate": "2025-09-17T08:53:35.977Z",
-    "endDate": "2025-09-24T08:53:00.000Z"
+    "name": "SCRUM スプリント 4",
+    "startDate": "2025-09-25T01:54:22.028Z",
+    "endDate": "2025-10-02T01:54:00.000Z"
   },
   "totals": {
     "parents": 6,
-    "subtasks": 27,
-    "done": 23,
-    "notDone": 4
+    "subtasks": 30,
+    "done": 17,
+    "notDone": 13
   },
-  "doneRate": 0.8518518518518519,
+  "doneRate": 0.5666666666666667,
   "targetDoneRate": 0.8,
   "axis": "percent",
   "extrasAvailable": {
