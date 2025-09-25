@@ -1,45 +1,31 @@
-## 要約 | 2025-09-25 17:32
-What: SCRUM スプリント 4 (2025-09-25T01:54:22.028Z—2025-10-02T01:54:00.000Z) — 30 tasks, Done 17 (56%). (data: sprint_total=30, sprint_done=17)
-So what: 目標80%未達
+## 要約 | 2025-09-25 18:58
+What: SCRUM スプリント 4 (2025-09-25T01:54:22.028Z—2025-10-02T01:54:00.000Z) — 45 tasks, Done 22 (48%). (data: sprint_total=45, sprint_done=22)
+So what: 目標80%未達、レビュー滞留 (data: time_in_status[Review].avg=6.7d)
 Next: 高優先度未完了0件の即時割当、レビュー担当の増員検討
 
 ## AI要約 (Gemini)
 
-## 1. エグゼクティブサマリー
+## 🎯 結論（1行断言）
+完了率49% - 危険🚨 残7日で目標80%（遅延有）
 
-**評価:** 要警戒
+## 🚨 即実行アクション（重要順3つ）
+1. 担当者不明 → SCRUM-21（受け入れテスト）作成完了 （今日中）
+2. 福聖 → SCRUM-6（Slack連携）完了 （今日中）
+3. sakiya sumida → SCRUM-3（Jira連携）完了 （今日中）
 
-**What:** スプリント SCRUM スプリント 4 (2025/09/25-2025/10/02) では、合計 30 件中 17 件が完了し、完了率は 56.7% です。
-
-**So what:** 目標達成状況は 80% に対して 56.7% と大きく乖離しており、目標達成は困難な状況です。また、`forecast_status` が提供されていないため、スケジュール遅延の予測はできませんが、現状の完了率から遅延の可能性が高いと判断されます。
-
-## 2. 注目すべきデータと洞察
-
-*   **未着手のタスクが複数存在し、担当者不在:** SCRUM-22, SCRUM-21, SCRUM-6 は「To Do」または「IN_progress」ステータスですが、担当者が割り当てられていない、または担当者不在のため進行が滞っている可能性があります。これにより、スプリント全体の進捗に遅延が生じています。
-*   **完了率の低さ:** 完了率 56.7% は目標達成率 80% を大きく下回っており、スプリントの目標達成が危ぶまれます。これは、タスクの割り当てや進行管理に課題があることを示唆しています。
-*   **レビュー待ちのタスクの存在:** SCRUM-11 は完了していますが、レビュー待ちの状態です。レビュープロセスにボトルネックがある場合、完了したタスクのクローズが遅れ、全体の進捗に影響を与える可能性があります。
-
-## 3. 推奨アクションプラン
-
-*   **誰が:** スクラムマスター
-    *   **何を:** 未着手または進行中のタスク（SCRUM-22, SCRUM-21, SCRUM-6）について、担当者を速やかに割り当て、タスクの進捗状況を確認する。
-    *   **いつまでに:** 本日中
-*   **誰が:** チーム全体
-    *   **何を:** スプリントゴール達成に向けた優先順位の見直しと、タスクの再配分を検討する。
-    *   **いつまでに:** 明日午前中
-*   **誰が:** スクラムマスター/レビュー担当者
-    *   **何を:** レビュー待ちのタスク（SCRUM-11）のレビューを優先的に実施し、完了させる。
-    *   **いつまでに:** 本日中
+## 📊 根拠（2行以内）
+• データ: 完了22/45件、必要消化2件/日（実績0件/日）
+• 問題: 未着手タスク滞留6日超 + 実績消化ゼロ = 目標未達リスク
 
 ## リスク
 - 特筆すべきリスクなし
 
 ## エビデンス (Top)
-- SCRUM-11 JQL生成ロジック | 完了 | 7.0d | assignee: sakiya sumida | why: 完了済み、レビュー待ちのため | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-11
-- SCRUM-22 ドキュメント作成 | To Do | 7.0d | assignee:  | why: 未着手、担当者不在のため | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-22
-- SCRUM-21 受け入れテスト | To Do | 7.0d | assignee:  | why: 未着手、担当者不在のため | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-21
-- SCRUM-6 Slack連携 | IN_progress | 7.0d | assignee:  | why: 進行中、担当者不在のため | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-6
-- SCRUM-3 JiraのSlack連携による今日のタスクの呼び出し | IN_progress | 7.0d | assignee: sakiya sumida | why: 進行中、担当者sakiya sumidaのため | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-3
+- SCRUM-21 受け入れテスト | To Do | 7.0d | assignee:  | why: 未着手、滞留日数6日超。 | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-21
+- SCRUM-6 Slack連携 | IN_progress | 7.0d | assignee: 福聖 | why: 進行中、担当者あり。 | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-6
+- SCRUM-3 JiraのSlack連携による今日のタスクの呼び出し | IN_progress | 7.0d | assignee: sakiya sumida | why: 進行中、担当者あり。 | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-3
+- SCRUM-73 各ユースケース別のドキュメント生成 | IN_progress | 7.0d | assignee: 福聖 | why: 進行中、担当者あり。 | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-73
+- SCRUM-79 プロンプトの品質向上 | IN_progress | 6.7d | assignee: 福聖 | why: 進行中、担当者あり。 | https://zaq1122s-1758530383487.atlassian.net/browse/SCRUM-79
 
 ## 短期アクション
 1) レビュー担当を1名追加 — 期待: Review平均を2日短縮

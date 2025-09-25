@@ -417,25 +417,73 @@ def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Opt
             仮定や想像の数値は用いず、[出力形式]に厳密に従って、実務に直結する洞察とアクションを提示してください。
             """
         )
+        
         output_format = dedent(
             """
-            1. エグゼクティブサマリー（結論から）
-            - 評価は context.evaluation_label をそのまま使用（順調/やや注意/要警戒）。独自しきい値は使わない。
-            - What: スプリント名と期間、合計/完了件数、完了率。（例: data: sprint_total=, sprint_done=, done_percent=）
-            - So what: 目標達成状況（target_percent と tolerance_percent のみ基準）。90% 等の別基準は使わない。スケジュールは forecast_status（遅延予測/間に合う予測）を優先。
+            ## 🎯 結論（1行断言）
+            完了率[X%] - [順調✅/注意⚠️/危険🚨] 残[Y]日で目標[Z%]（[理由5字以内]）
 
-            2. 注目すべきデータと洞察
-            - 問題があるデータを根拠とともに列挙、根本原因を推測・分析（専門家視点）。端的に3行程度でまとめる。
+            ## 🚨 即実行アクション（重要順3つ）
+            1. [担当者] → [タスク] （[期限]）
+            2. [担当者] → [タスク] （[期限]） 
+            3. [担当者] → [タスク] （[期限]）
 
-            3. 推奨アクションプラン
-            - 誰が／何を／いつまでに の形式で3項目、即実行可能なアクションを提案。
+            ## 📊 根拠（2行以内）
+            • データ: 完了[X]/全[Y]件、必要消化[Z]件/日（実績[W]件/日）
+            • 問題: [最大リスク] + [ボトルネック] = [影響度数値]
             """
         )
+        
+        constraints = dedent(
+            """
+            【厳守制約】
+            - 曖昧語禁止（推測・可能性・おそらく等）
+            - 専門語→平易語（実装→作成、レビュー→確認、アサイン→割当）
+            - 全数値必須、担当者名・期限必須
+            - 各セクション規定行数厳守（結論1行、アクション3行、根拠2行）
+            - 文字数300字以内、Markdown形式
+            - JSONデータ以外の情報使用禁止
+            """
+        )
+        
+        format_specs = dedent(
+            """
+            【出力仕様】
+            • ステータス判定: 完了率80%以上→✅順調、60-79%→⚠️注意、60%未満→🚨危険
+            • アクション優先順位: 1)期限超過 2)期限間近 3)高優先度未着手 4)確認待ち 5)未割当
+            • 数値必須項目: 完了率%、残日数、完了件数/全件数、必要消化件数/日、実績件数/日
+            • 担当者表記: フルネーム不要、姓のみ可（田中、佐藤等）
+            • 期限表記: 相対表現（今日、明日、X日後）または具体日時
+            """
+        )
+        
+        example_output = dedent(
+            """
+            【出力例】
+            ## 🎯 結論（1行断言）
+            完了率65% - 注意⚠️ 残3日で目標80%（遅延有）
+
+            ## 🚨 即実行アクション（重要順3つ）
+            1. 田中 → API作成完了 （明日17時）
+            2. 佐藤 → UI確認完了 （明日12時）
+            3. 山田 → DB設計割当 （今日中）
+
+            ## 📊 根拠（2行以内）
+            • データ: 完了13/20件、必要消化3件/日（実績2.1件/日）
+            • 問題: API遅延2日 + 確認待ち5件 = 目標未達リスク40%
+            """
+        )
+        
+        # プロンプト組み立て
         prompt = (
             intro
             + "\n[出力形式]\n"
             + output_format
-            + f"\nコンテキスト(JSON): {json.dumps(context, ensure_ascii=False)}\n"
+            + "\n" + constraints
+            + "\n" + format_specs
+            + "\n" + example_output
+            + f"\n\n【分析対象データ】\nコンテキスト(JSON): {json.dumps(context, ensure_ascii=False, indent=2)}\n"
+            + "\n上記JSONデータのみを根拠として、出力形式に厳密に従い分析結果を出力してください。"
         )
         # Try primary then fallback model
         text = _call(model_name)
@@ -716,8 +764,30 @@ def draw_png(
     sx = focus_board_x0
     focus_s_x0 = sx
     focus_s_x1 = sx + spr_total_w
-    if spr_ratio is not None:
-        # Draw current sprint portion vs others (proportional)
+        # アクティブスプリントが1件のみ → 帯を1本（Active Sprint Done/Remaining の2色積み棒）
+    if sprints_n == 1:
+        # 1本の帯で完了/未完了を表示
+        g.rectangle([sx, spr_y0 + 4, sx + spr_total_w, spr_y1 - 4], fill=col_sprint_focus, outline=col_outline)
+        focus_s_x0, focus_s_x1 = sx, sx + spr_total_w
+        
+        # Backlogを別の小さな横バーに表示
+        try:
+            kpi_data = (extras or {}).get("kpis", {}) if extras else {}
+            project_open_total = int(kpi_data.get("projectOpenTotal", 0))
+            sprint_open = int(kpi_data.get("sprintOpen", 0))  # 直接sprintOpenを使用
+            backlog_open = max(0, project_open_total - sprint_open)
+            
+            if backlog_open > 0:
+                # Backlog表示用の小さなバー（左上スプリント帯の下）
+                backlog_y0 = spr_y1 + 2
+                backlog_y1 = backlog_y0 + 12
+                backlog_w = min(200, spr_total_w // 3)  # 幅は制限
+                g.rectangle([sx, backlog_y0, sx + backlog_w, backlog_y1], fill=(230, 230, 230), outline=col_outline)
+                g.text((sx + 4, backlog_y0 + 1), f"Backlog: {backlog_open}", font=font_xs, fill=col_text)
+        except Exception:
+            pass
+    elif spr_ratio is not None:
+        # 複数アクティブ（将来拡張）の場合のみ割合分割
         cur_w = max(2, int(round(spr_total_w * spr_ratio)))
         other_w = max(0, spr_total_w - cur_w)
         g.rectangle([sx, spr_y0 + 4, sx + cur_w, spr_y1 - 4], fill=col_sprint_focus, outline=col_outline)
@@ -1366,9 +1436,9 @@ def draw_png(
         card_h = h
         # six KPI cards
         order = [
-            ("projectTotal", "プロジェクト内総タスク数", (40, 100, 200)),
-            ("sprintTotal", "スプリント内総タスク数", (60, 160, 60)),
-            ("sprintDone", "スプリント内総完了タスク数", (27, 158, 119)),
+            ("projectOpenTotal", "プロジェクト内未完了タスク数", (200, 100, 40)),  # 未完了タスク数に変更
+            ("sprintOpen", "スプリント内未完了タスク数", (60, 160, 60)),  # 総タスク数から未完了タスク数に変更
+            ("unassignedCount", "担当者未定タスク数", (27, 158, 119)),  # 完了タスク数から担当者未定タスク数に変更
             ("overdue", "期限遵守中✅", (60, 140, 60)),
             ("dueSoon", "注意:7日以内期限", (230, 140, 0)),
             ("highPriorityTodo", "要注意タスク(高優先度)", (200, 120, 60)),
@@ -1383,6 +1453,16 @@ def draw_png(
             if key == "overdue" and v == 0:
                 txt = "0"
                 col_draw = col_ok
+            elif key == "sprintOpen":
+                # 未完了 / 総数 の形式で表示
+                sprint_total = int(kpis.get("sprintTotal", 0))
+                txt = f"{v}/{sprint_total}"
+                col_draw = col
+            elif key == "projectOpenTotal":
+                # プロジェクト内未完了 / 総数 の形式で表示
+                project_total = int(kpis.get("projectTotal", 0))
+                txt = f"{v}/{project_total}"
+                col_draw = col
             else:
                 txt = str(v)
                 col_draw = col
@@ -1519,18 +1599,133 @@ def draw_png(
     if ds > 0:
         action_suggestions.append(f"期限接近 {ds}件の優先順位再確認")
     
+    # 新しいcontextキーの計算
+    try:
+        kpi_data = (extras or {}).get("kpis", {}) if extras else {}
+        project_open_total = int(kpi_data.get("projectOpenTotal", 0))
+        sprint_open = sprint_total - sprint_done
+        backlog_open = max(0, project_open_total - sprint_open)
+        
+        # Velocity関連の計算
+        velocity_data = (extras or {}).get("velocity") if extras else None
+        velocity_avg = 0.0
+        last_velocity = 0.0
+        if velocity_data:
+            if "avg" in velocity_data:  # 新形式
+                velocity_avg = float(velocity_data.get("avg", 0.0))
+                history = velocity_data.get("history", [])
+                if history:
+                    last_velocity = float(history[0].get("points", 0.0))
+            else:  # 旧形式
+                velocity_avg = float(velocity_data.get("avgPoints", 0.0))
+                points = velocity_data.get("points", [])
+                if points:
+                    last_velocity = float(points[0].get("points", 0.0))
+        
+        # 残日数の計算（スプリント終了日から）
+        remaining_days = 0
+        if sprint_end:
+            try:
+                from datetime import datetime, date
+                if "T" in sprint_end:
+                    end_date = datetime.fromisoformat(sprint_end.replace("Z", "+00:00")).date()
+                else:
+                    end_date = datetime.strptime(sprint_end, "%Y-%m-%d").date()
+                today = date.today()
+                remaining_days = max(0, (end_date - today).days)
+            except Exception:
+                remaining_days = 0
+        
+        # 必要な日次消化数の計算
+        required_daily_burn = None
+        if remaining_days > 0:
+            import math
+            target_remaining = max(0, int(target_done_rate * sprint_total) - sprint_done)
+            required_daily_burn = math.ceil(target_remaining / remaining_days) if target_remaining > 0 else 0
+        
+        # 実績日次消化数（直近3日の平均）
+        actual_daily_burn = None
+        burndown_data = (extras or {}).get("burndown") if extras else None
+        if burndown_data:
+            time_series = burndown_data.get("timeSeries", [])
+            if len(time_series) >= 4:  # 最低4日分のデータが必要
+                try:
+                    burn_lookback_days = int(os.getenv("BURN_LOOKBACK_DAYS", "3"))
+                    recent_series = time_series[-burn_lookback_days-1:]  # 最新N+1日分
+                    if len(recent_series) >= 2:
+                        total_burned = 0.0
+                        for i in range(len(recent_series) - 1):
+                            prev_remaining = float(recent_series[i].get("remaining", 0.0))
+                            curr_remaining = float(recent_series[i+1].get("remaining", 0.0))
+                            daily_burn = max(0.0, prev_remaining - curr_remaining)
+                            total_burned += daily_burn
+                        actual_daily_burn = total_burned / max(1, len(recent_series) - 1)
+                except Exception:
+                    actual_daily_burn = None
+        
+        # ボトルネック工程の特定
+        bottleneck_status = None
+        bottleneck_days = 0.0
+        tis_data = (extras or {}).get("time_in_status") if extras else None
+        if tis_data:
+            per_issue = tis_data.get("perIssue", [])
+            if per_issue:
+                # 各ステータスの平均滞在時間を計算
+                status_totals = {}
+                status_counts = {}
+                for issue in per_issue:
+                    by_status = issue.get("byStatus", {})
+                    for status, days in by_status.items():
+                        try:
+                            days_float = float(days)
+                            status_totals[status] = status_totals.get(status, 0.0) + days_float
+                            status_counts[status] = status_counts.get(status, 0) + 1
+                        except Exception:
+                            continue
+                
+                # 最も時間がかかるステータスを特定
+                max_avg_days = 0.0
+                for status in status_totals:
+                    avg_days = status_totals[status] / max(1, status_counts[status])
+                    if avg_days > max_avg_days:
+                        max_avg_days = avg_days
+                        bottleneck_status = status
+                        bottleneck_days = avg_days
+        
+    except Exception:
+        project_open_total = 0
+        sprint_open = sprint_total - sprint_done
+        backlog_open = 0
+        velocity_avg = 0.0
+        last_velocity = 0.0
+        remaining_days = 0
+        required_daily_burn = None
+        actual_daily_burn = None
+        bottleneck_status = None
+        bottleneck_days = 0.0
+
     context_for_ai = {
         "sprint_label": sprint_label,
         "sprint_total": sprint_total,
         "sprint_done": sprint_done,
         "done_percent": round(done_rate * 100, 1),
         "target_percent": int(target_done_rate * 100),
+        "remaining_days": remaining_days,
+        "required_daily_burn": required_daily_burn,
+        "actual_daily_burn": actual_daily_burn,
+        "sprint_open": sprint_open,
+        "backlog_open": backlog_open,
+        "velocity_avg": velocity_avg,
+        "last_velocity": last_velocity,
+        "bottleneck_status": bottleneck_status,
+        "bottleneck_days": bottleneck_days,
         "review_avg_days": review_avg,
         "overdue": int(risks_data.get("overdue", 0)),
         "due_soon": int(risks_data.get("dueSoon", 0)),
         "high_priority_unstarted": int(risks_data.get("highPriorityTodo", 0)),
         "suggested_actions": action_suggestions,
         "top_evidence": (extras or {}).get("evidence", []) or [],
+        "project_open_total": project_open_total,
     }
     raw_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     gemini_key = _sanitize_api_key(raw_key)
@@ -1583,13 +1778,10 @@ def draw_png(
         overlay_enabled = os.getenv("AI_OVERLAY_IN_IMAGE", "1").lower() in ("1", "true", "yes")
         ai_text = (extras or {}).get("ai_full_text") if extras else None
         if overlay_enabled and isinstance(ai_text, str) and ai_text.strip():
-            # Keep only sections 1-3 to fit one document
+            # Keep the full AI summary content without truncation
             try:
                 import re as _re
-                m = _re.search(r"(^|\n)\s*1\..*?(?=\n\s*4\.|\Z)", ai_text, flags=_re.DOTALL)
-                if m:
-                    ai_text = m.group(0).strip()
-                # collapse multiple blank lines to single newline
+                # Remove excessive whitespace but keep all content
                 ai_text = _re.sub(r"\r", "", ai_text)
                 ai_text = _re.sub(r"\n[ \t]*\n+", "\n", ai_text)
             except Exception:
@@ -1615,18 +1807,29 @@ def draw_png(
                         buf = ""
                         for ch in s:
                             cand = buf + ch
-                            if g.textlength(cand, font=font) <= max_width:
-                                buf = cand
-                            else:
-                                if buf:
+                            try:
+                                # 絵文字や特殊文字の描画幅を安全に計算
+                                if g.textlength(cand, font=font) <= max_width:
+                                    buf = cand
+                                else:
+                                    if buf:
+                                        lines.append(buf)
+                                        buf = ch
+                                    else:
+                                        lines.append(ch)
+                                        buf = ""
+                            except Exception:
+                                # 文字幅計算に失敗した場合は安全に処理
+                                if len(buf) > 0:
                                     lines.append(buf)
                                     buf = ch
                                 else:
-                                    lines.append(ch)
-                                    buf = ""
+                                    buf = ch
                         if buf != "":
                             lines.append(buf)
                     return lines
+
+
 
                 content_x = panel_x0 + 8
                 content_y = panel_y0 + 6 + text_wh(title, font_md)[1] + 4
@@ -1752,7 +1955,7 @@ def main() -> int:
     except Exception:
         extras["workload"] = None
     # F. KPI cards and risks
-    kpis: Dict[str, int] = {"projectTotal": 0, "sprintTotal": 0, "sprintDone": 0, "overdue": 0, "dueSoon": 0, "highPriorityTodo": 0}
+    kpis: Dict[str, int] = {"projectTotal": 0, "sprintTotal": 0, "sprintOpen": 0, "sprintDone": 0, "unassignedCount": 0, "overdue": 0, "dueSoon": 0, "highPriorityTodo": 0}
     risks: Dict[str, int] = {"overdue": 0, "dueSoon": 0, "highPriorityTodo": 0}
     try:
         od_args = ["--scope", "sprint"]
@@ -1780,6 +1983,13 @@ def main() -> int:
                 code_c, cnt, _ = search_count(JIRA_DOMAIN, auth, jql)
             if code_c == 200 and cnt is not None:
                 risks["highPriorityTodo"] = int(cnt)
+    except Exception:
+        pass
+    # Unassigned count
+    try:
+        unassigned_data = get_json_from_script_args(str(base_dir / "queries" / "jira_q_unassigned_count.py"), ["--scope", "sprint"])
+        if isinstance(unassigned_data, dict):
+            kpis["unassignedCount"] = int(unassigned_data.get("unassignedCount", 0))
     except Exception:
         pass
     # Enforce risks to be subtask-based (override with subtask-only JQL when possible)
@@ -1815,6 +2025,7 @@ def main() -> int:
             totals_obj = (data or {}).get("totals", {}) if isinstance(data, dict) else {}
             kpis["sprintTotal"] = int(totals_obj.get("subtasks", 0))
             kpis["sprintDone"] = int(totals_obj.get("done", 0))
+            kpis["sprintOpen"] = int(totals_obj.get("notDone", 0))  # 未完了タスク数
         except Exception:
             pass
         if auth and JIRA_DOMAIN:
@@ -1824,6 +2035,9 @@ def main() -> int:
                 if isinstance(ps, dict):
                     extras["project_subtask_count"] = ps
                     kpis["projectTotal"] = int(ps.get("total", 0))
+                    kpis["projectOpenTotal"] = int(ps.get("openTotal", 0))  # 未完了タスク数
+                    # projectAllSubtasksを保持（グラフ非表示、データのみ）
+                    extras["projectAllSubtasks"] = int(ps.get("total", 0))
             except Exception:
                 # Fallback to inline JQL if script fails
                 proj_key = os.getenv("JIRA_PROJECT_KEY") or try_infer_project_key_from_board(JIRA_DOMAIN, auth, board) or None
@@ -1834,6 +2048,14 @@ def main() -> int:
                         code_pt, cnt_pt, _ = search_count(JIRA_DOMAIN, auth, jql_proj_sub)
                     if code_pt == 200 and cnt_pt is not None:
                         kpis["projectTotal"] = int(cnt_pt)
+                        extras["projectAllSubtasks"] = int(cnt_pt)  # 全タスク数保持
+                        # フォールバック：未完了数も取得
+                        jql_proj_open = f"project={proj_key} AND type in subTaskIssueTypes() AND statusCategory != \"Done\""
+                        code_po, cnt_po, _ = approximate_count(JIRA_DOMAIN, auth, jql_proj_open)
+                        if not (code_po == 200 and cnt_po is not None):
+                            code_po, cnt_po, _ = search_count(JIRA_DOMAIN, auth, jql_proj_open)
+                        if code_po == 200 and cnt_po is not None:
+                            kpis["projectOpenTotal"] = int(cnt_po)
     except Exception:
         pass
     # carry risks into KPI deck as well
@@ -2003,7 +2225,7 @@ def main() -> int:
             k = extras.get("kpis") or {}
             r = extras.get("risks") or {}
             try:
-                print(f"- KPI: projectTotal={k.get('projectTotal')}, sprintTotal={k.get('sprintTotal')}, sprintDone={k.get('sprintDone')}")
+                print(f"- KPI: projectTotal={k.get('projectTotal')}, sprintTotal={k.get('sprintTotal')}, sprintOpen={k.get('sprintOpen')}, unassignedCount={k.get('unassignedCount')}")
                 print(f"- リスク: overdue={r.get('overdue')}, dueSoon={r.get('dueSoon')}, highPriorityTodo={r.get('highPriorityTodo')}")
             except Exception:
                 pass

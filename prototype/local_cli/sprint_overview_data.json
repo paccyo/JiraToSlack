@@ -5,12 +5,12 @@
     "endDate": "2025-10-02T01:54:00.000Z"
   },
   "totals": {
-    "parents": 6,
-    "subtasks": 30,
-    "done": 17,
-    "notDone": 13
+    "parents": 9,
+    "subtasks": 45,
+    "done": 22,
+    "notDone": 23
   },
-  "doneRate": 0.5666666666666667,
+  "doneRate": 0.4888888888888889,
   "targetDoneRate": 0.8,
   "axis": "percent",
   "extrasAvailable": {
@@ -21,6 +21,7 @@
     "time_in_status": true,
     "workload": true,
     "project_subtask_count": true,
+    "projectAllSubtasks": true,
     "kpis": true,
     "risks": true,
     "evidence": true,

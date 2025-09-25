@@ -146,7 +146,7 @@
     {
       "parentKey": "SCRUM-23",
       "parentSummary": "仮想環境構築",
-      "assignee": null,
+      "assignee": "福聖",
       "subtasks": [
         {
           "key": "SCRUM-53",
@@ -154,7 +154,7 @@
           "status": "完了",
           "done": true,
           "storyPoints": 1.0,
-          "assignee": null,
+          "assignee": "福聖",
           "typeName": "Subtask",
           "created": "2025-09-24T17:08:43.116+0900",
           "startedAt": null,
@@ -166,7 +166,7 @@
           "status": "完了",
           "done": true,
           "storyPoints": 1.0,
-          "assignee": null,
+          "assignee": "福聖",
           "typeName": "Subtask",
           "created": "2025-09-24T17:08:43.125+0900",
           "startedAt": null,
@@ -178,7 +178,7 @@
           "status": "完了",
           "done": true,
           "storyPoints": 1.0,
-          "assignee": null,
+          "assignee": "福聖",
           "typeName": "Subtask",
           "created": "2025-09-24T17:08:43.151+0900",
           "startedAt": null,
@@ -190,7 +190,7 @@
           "status": "完了",
           "done": true,
           "storyPoints": 1.0,
-          "assignee": null,
+          "assignee": "福聖",
           "typeName": "Subtask",
           "created": "2025-09-24T17:08:43.126+0900",
           "startedAt": null,
@@ -202,7 +202,7 @@
           "status": "完了",
           "done": true,
           "storyPoints": 1.0,
-          "assignee": null,
+          "assignee": "福聖",
           "typeName": "Subtask",
           "created": "2025-09-24T17:08:43.157+0900",
           "startedAt": null,
@@ -214,7 +214,7 @@
           "status": "完了",
           "done": true,
           "storyPoints": 1.0,
-          "assignee": null,
+          "assignee": "福聖",
           "typeName": "Subtask",
           "created": "2025-09-24T17:08:43.894+0900",
           "startedAt": null,
@@ -223,6 +223,75 @@
       ],
       "doneCount": 6,
       "totalSubtasks": 6
+    },
+    {
+      "parentKey": "SCRUM-22",
+      "parentSummary": "ドキュメント作成",
+      "assignee": "福聖",
+      "subtasks": [
+        {
+          "key": "SCRUM-49",
+          "summary": "フィードバックを反映し、最終版を作成する",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T17:08:26.652+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-25T17:35:56.792+0900"
+        },
+        {
+          "key": "SCRUM-48",
+          "summary": "ドキュメント本文を執筆する",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T17:08:26.652+0900",
+          "startedAt": "2025-09-25T11:42:38.865+0900",
+          "completedAt": "2025-09-25T17:35:54.748+0900"
+        },
+        {
+          "key": "SCRUM-50",
+          "summary": "ドキュメントのレビューを依頼・実施する",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T17:08:26.684+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-25T17:35:50.895+0900"
+        },
+        {
+          "key": "SCRUM-51",
+          "summary": "ドキュメントの構成案を作成する",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T17:08:26.687+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-25T11:42:35.038+0900"
+        },
+        {
+          "key": "SCRUM-52",
+          "summary": "必要な情報を収集する",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-24T17:08:26.687+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-25T11:42:24.318+0900"
+        }
+      ],
+      "doneCount": 5,
+      "totalSubtasks": 5
     },
     {
       "parentKey": "SCRUM-21",
@@ -282,75 +351,6 @@
       "totalSubtasks": 4
     },
     {
-      "parentKey": "SCRUM-22",
-      "parentSummary": "ドキュメント作成",
-      "assignee": null,
-      "subtasks": [
-        {
-          "key": "SCRUM-49",
-          "summary": "フィードバックを反映し、最終版を作成する",
-          "status": "To Do",
-          "done": false,
-          "storyPoints": 1.0,
-          "assignee": null,
-          "typeName": "Subtask",
-          "created": "2025-09-24T17:08:26.652+0900",
-          "startedAt": null,
-          "completedAt": null
-        },
-        {
-          "key": "SCRUM-48",
-          "summary": "ドキュメント本文を執筆する",
-          "status": "IN_progress",
-          "done": false,
-          "storyPoints": 1.0,
-          "assignee": null,
-          "typeName": "Subtask",
-          "created": "2025-09-24T17:08:26.652+0900",
-          "startedAt": "2025-09-25T11:42:38.865+0900",
-          "completedAt": null
-        },
-        {
-          "key": "SCRUM-50",
-          "summary": "ドキュメントのレビューを依頼・実施する",
-          "status": "To Do",
-          "done": false,
-          "storyPoints": 1.0,
-          "assignee": null,
-          "typeName": "Subtask",
-          "created": "2025-09-24T17:08:26.684+0900",
-          "startedAt": null,
-          "completedAt": null
-        },
-        {
-          "key": "SCRUM-51",
-          "summary": "ドキュメントの構成案を作成する",
-          "status": "完了",
-          "done": true,
-          "storyPoints": 1.0,
-          "assignee": null,
-          "typeName": "Subtask",
-          "created": "2025-09-24T17:08:26.687+0900",
-          "startedAt": null,
-          "completedAt": "2025-09-25T11:42:35.038+0900"
-        },
-        {
-          "key": "SCRUM-52",
-          "summary": "必要な情報を収集する",
-          "status": "完了",
-          "done": true,
-          "storyPoints": 1.0,
-          "assignee": null,
-          "typeName": "Subtask",
-          "created": "2025-09-24T17:08:26.687+0900",
-          "startedAt": null,
-          "completedAt": "2025-09-25T11:42:24.318+0900"
-        }
-      ],
-      "doneCount": 2,
-      "totalSubtasks": 5
-    },
-    {
       "parentKey": "SCRUM-73",
       "parentSummary": "各ユースケース別のドキュメント生成",
       "assignee": "福聖",
@@ -358,14 +358,14 @@
         {
           "key": "SCRUM-74",
           "summary": "ユースケースのリストアップ",
-          "status": "To Do",
-          "done": false,
+          "status": "完了",
+          "done": true,
           "storyPoints": 1.0,
           "assignee": "福聖",
           "typeName": "Subtask",
           "created": "2025-09-25T11:42:07.785+0900",
           "startedAt": null,
-          "completedAt": null
+          "completedAt": "2025-09-25T17:37:00.798+0900"
         },
         {
           "key": "SCRUM-76",
@@ -382,26 +382,26 @@
         {
           "key": "SCRUM-75",
           "summary": "ユースケースごとの要件整理",
-          "status": "To Do",
+          "status": "IN_progress",
           "done": false,
           "storyPoints": 1.0,
           "assignee": "福聖",
           "typeName": "Subtask",
           "created": "2025-09-25T11:42:07.801+0900",
-          "startedAt": null,
+          "startedAt": "2025-09-25T17:37:05.478+0900",
           "completedAt": null
         },
         {
           "key": "SCRUM-78",
           "summary": "ドキュメントのレビューと修正",
-          "status": "To Do",
-          "done": false,
+          "status": "完了",
+          "done": true,
           "storyPoints": 1.0,
           "assignee": "福聖",
           "typeName": "Subtask",
           "created": "2025-09-25T11:42:07.831+0900",
           "startedAt": null,
-          "completedAt": null
+          "completedAt": "2025-09-25T17:37:08.968+0900"
         },
         {
           "key": "SCRUM-77",
@@ -416,14 +416,221 @@
           "completedAt": null
         }
       ],
+      "doneCount": 2,
+      "totalSubtasks": 5
+    },
+    {
+      "parentKey": "SCRUM-79",
+      "parentSummary": "プロンプトの品質向上",
+      "assignee": "福聖",
+      "subtasks": [
+        {
+          "key": "SCRUM-80",
+          "summary": "改善後プロンプトのテストと評価",
+          "status": "To Do",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-25T17:36:45.010+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-82",
+          "summary": "改善点の洗い出しと要件定義",
+          "status": "To Do",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-25T17:36:45.015+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-84",
+          "summary": "プロンプトの修正・改善案の作成",
+          "status": "To Do",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-25T17:36:45.020+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-83",
+          "summary": "フィードバックの収集と最終調整",
+          "status": "To Do",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-25T17:36:45.028+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-81",
+          "summary": "既存プロンプトのレビューと分析",
+          "status": "To Do",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-25T17:36:45.028+0900",
+          "startedAt": null,
+          "completedAt": null
+        }
+      ],
+      "doneCount": 0,
+      "totalSubtasks": 5
+    },
+    {
+      "parentKey": "SCRUM-85",
+      "parentSummary": "レビュー",
+      "assignee": null,
+      "subtasks": [
+        {
+          "key": "SCRUM-86",
+          "summary": "レビュー結果の記録",
+          "status": "To Do",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": null,
+          "typeName": "Subtask",
+          "created": "2025-09-25T18:04:01.427+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-87",
+          "summary": "ドキュメントの収集",
+          "status": "To Do",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": null,
+          "typeName": "Subtask",
+          "created": "2025-09-25T18:04:01.433+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-88",
+          "summary": "フィードバックの提供",
+          "status": "To Do",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": null,
+          "typeName": "Subtask",
+          "created": "2025-09-25T18:04:01.470+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-89",
+          "summary": "レビュー基準の確認",
+          "status": "To Do",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": null,
+          "typeName": "Subtask",
+          "created": "2025-09-25T18:04:01.475+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-90",
+          "summary": "レビューの実施",
+          "status": "To Do",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": null,
+          "typeName": "Subtask",
+          "created": "2025-09-25T18:04:01.504+0900",
+          "startedAt": null,
+          "completedAt": null
+        }
+      ],
+      "doneCount": 0,
+      "totalSubtasks": 5
+    },
+    {
+      "parentKey": "SCRUM-91",
+      "parentSummary": "表記バグ",
+      "assignee": null,
+      "subtasks": [
+        {
+          "key": "SCRUM-93",
+          "summary": "レビュー依頼・コードレビューを実施する",
+          "status": "To Do",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": null,
+          "typeName": "Subtask",
+          "created": "2025-09-25T18:05:04.201+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-94",
+          "summary": "バグの再現手順を確認する",
+          "status": "To Do",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": null,
+          "typeName": "Subtask",
+          "created": "2025-09-25T18:05:04.185+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-95",
+          "summary": "表記バグの修正を行う",
+          "status": "To Do",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": null,
+          "typeName": "Subtask",
+          "created": "2025-09-25T18:05:04.211+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-96",
+          "summary": "修正内容の動作確認を行う",
+          "status": "To Do",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": null,
+          "typeName": "Subtask",
+          "created": "2025-09-25T18:05:04.236+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-97",
+          "summary": "該当箇所のコードを特定する",
+          "status": "To Do",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": null,
+          "typeName": "Subtask",
+          "created": "2025-09-25T18:05:04.242+0900",
+          "startedAt": null,
+          "completedAt": null
+        }
+      ],
       "doneCount": 0,
       "totalSubtasks": 5
     }
   ],
   "totals": {
-    "parents": 6,
-    "subtasks": 30,
-    "done": 17,
-    "notDone": 13
+    "parents": 9,
+    "subtasks": 45,
+    "done": 22,
+    "notDone": 23
   }
 }

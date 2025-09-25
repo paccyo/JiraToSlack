@@ -74,6 +74,13 @@ def main() -> int:
     # Aggregate time in status per issue and overall
     per_issue: List[Dict[str, Any]] = []
     total_by_status: Dict[str, float] = {}
+    
+    # 完了ステータス（statusCategory="Done"）を除外するためのヘルパー関数
+    def is_done_status(status_name: str) -> bool:
+        """ステータス名が完了状態かどうか判定"""
+        # 一般的な完了ステータス名をチェック
+        done_statuses = {"完了", "Done", "Closed", "Resolved", "完成", "終了"}
+        return status_name in done_statuses
 
     for iss in issues:
         iid = iss.get("id")
@@ -96,12 +103,16 @@ def main() -> int:
                         events.append((created, str(name)))
         # Sort by time
         events.sort(key=lambda x: x[0])
-        # If we have no events, take current status as single bucket for the whole window
+        # If we have no events, take current status as single bucket for the whole window (完了ステータスは除外)
         if not events:
             cur = ((iss.get("fields") or {}).get("status") or {}).get("name") or "(unknown)"
-            dur = max(0.0, (until - since).total_seconds())
-            total_by_status[cur] = total_by_status.get(cur, 0.0) + dur
-            per_issue.append({"key": ikey, "byStatus": {cur: dur}})
+            if not is_done_status(cur):
+                dur = max(0.0, (until - since).total_seconds())
+                total_by_status[cur] = total_by_status.get(cur, 0.0) + dur
+                per_issue.append({"key": ikey, "byStatus": {cur: dur}})
+            else:
+                # 完了ステータスの場合は空のデータを追加
+                per_issue.append({"key": ikey, "byStatus": {}})
             continue
 
         # Walk through events, compute durations clipped to [since, until]
@@ -125,22 +136,23 @@ def main() -> int:
                 continue
             if t > until:
                 break
-            # add duration for prev_status
+            # add duration for prev_status (完了ステータスは除外)
             dur = (t - prev_time).total_seconds()
-            if dur > 0 and prev_status:
+            if dur > 0 and prev_status and not is_done_status(prev_status):
                 by_status[prev_status] = by_status.get(prev_status, 0.0) + dur
             prev_time = t
             prev_status = st
 
-        # tail from last change to until
-        if prev_time and prev_status:
+        # tail from last change to until (完了ステータスは除外)
+        if prev_time and prev_status and not is_done_status(prev_status):
             tail = (until - max(prev_time, since)).total_seconds()
             if tail > 0:
                 by_status[prev_status] = by_status.get(prev_status, 0.0) + tail
 
-        # accumulate
+        # accumulate (完了ステータスは除外)
         for k, v in by_status.items():
-            total_by_status[k] = total_by_status.get(k, 0.0) + v
+            if not is_done_status(k):
+                total_by_status[k] = total_by_status.get(k, 0.0) + v
         per_issue.append({"key": ikey, "byStatus": by_status})
 
     # Convert seconds to requested unit
