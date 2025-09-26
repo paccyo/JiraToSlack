@@ -294,63 +294,6 @@
       "totalSubtasks": 5
     },
     {
-      "parentKey": "SCRUM-21",
-      "parentSummary": "受け入れテスト",
-      "assignee": null,
-      "subtasks": [
-        {
-          "key": "SCRUM-46",
-          "summary": "テスト結果のレビューと報告",
-          "status": "To Do",
-          "done": false,
-          "storyPoints": 1.0,
-          "assignee": null,
-          "typeName": "Subtask",
-          "created": "2025-09-24T17:08:13.836+0900",
-          "startedAt": null,
-          "completedAt": null
-        },
-        {
-          "key": "SCRUM-45",
-          "summary": "テストケースの作成",
-          "status": "To Do",
-          "done": false,
-          "storyPoints": 1.0,
-          "assignee": null,
-          "typeName": "Subtask",
-          "created": "2025-09-24T17:08:13.835+0900",
-          "startedAt": null,
-          "completedAt": null
-        },
-        {
-          "key": "SCRUM-44",
-          "summary": "テスト環境の準備",
-          "status": "To Do",
-          "done": false,
-          "storyPoints": 1.0,
-          "assignee": null,
-          "typeName": "Subtask",
-          "created": "2025-09-24T17:08:13.838+0900",
-          "startedAt": null,
-          "completedAt": null
-        },
-        {
-          "key": "SCRUM-47",
-          "summary": "受け入れテストの実施",
-          "status": "To Do",
-          "done": false,
-          "storyPoints": 1.0,
-          "assignee": null,
-          "typeName": "Subtask",
-          "created": "2025-09-24T17:08:13.867+0900",
-          "startedAt": null,
-          "completedAt": null
-        }
-      ],
-      "doneCount": 0,
-      "totalSubtasks": 4
-    },
-    {
       "parentKey": "SCRUM-73",
       "parentSummary": "各ユースケース別のドキュメント生成",
       "assignee": "福聖",
@@ -427,65 +370,65 @@
         {
           "key": "SCRUM-80",
           "summary": "改善後プロンプトのテストと評価",
-          "status": "To Do",
-          "done": false,
+          "status": "完了",
+          "done": true,
           "storyPoints": 1.0,
           "assignee": "福聖",
           "typeName": "Subtask",
           "created": "2025-09-25T17:36:45.010+0900",
           "startedAt": null,
-          "completedAt": null
+          "completedAt": "2025-09-26T09:35:38.836+0900"
         },
         {
           "key": "SCRUM-82",
           "summary": "改善点の洗い出しと要件定義",
-          "status": "To Do",
-          "done": false,
+          "status": "完了",
+          "done": true,
           "storyPoints": 1.0,
           "assignee": "福聖",
           "typeName": "Subtask",
           "created": "2025-09-25T17:36:45.015+0900",
           "startedAt": null,
-          "completedAt": null
+          "completedAt": "2025-09-26T09:35:32.894+0900"
         },
         {
           "key": "SCRUM-84",
           "summary": "プロンプトの修正・改善案の作成",
-          "status": "To Do",
-          "done": false,
+          "status": "完了",
+          "done": true,
           "storyPoints": 1.0,
           "assignee": "福聖",
           "typeName": "Subtask",
           "created": "2025-09-25T17:36:45.020+0900",
           "startedAt": null,
-          "completedAt": null
+          "completedAt": "2025-09-26T09:35:31.038+0900"
         },
         {
           "key": "SCRUM-83",
           "summary": "フィードバックの収集と最終調整",
-          "status": "To Do",
-          "done": false,
+          "status": "完了",
+          "done": true,
           "storyPoints": 1.0,
           "assignee": "福聖",
           "typeName": "Subtask",
           "created": "2025-09-25T17:36:45.028+0900",
           "startedAt": null,
-          "completedAt": null
+          "completedAt": "2025-09-26T09:35:28.153+0900"
         },
         {
           "key": "SCRUM-81",
           "summary": "既存プロンプトのレビューと分析",
-          "status": "To Do",
-          "done": false,
+          "status": "完了",
+          "done": true,
           "storyPoints": 1.0,
           "assignee": "福聖",
           "typeName": "Subtask",
           "created": "2025-09-25T17:36:45.028+0900",
           "startedAt": null,
-          "completedAt": null
+          "completedAt": "2025-09-26T09:35:24.590+0900"
         }
       ],
-      "doneCount": 0,
+      "doneCount": 5,
       "totalSubtasks": 5
     },
     {
@@ -625,12 +568,69 @@
       ],
       "doneCount": 0,
       "totalSubtasks": 5
+    },
+    {
+      "parentKey": "SCRUM-21",
+      "parentSummary": "受け入れテスト",
+      "assignee": null,
+      "subtasks": [
+        {
+          "key": "SCRUM-46",
+          "summary": "テスト結果のレビューと報告",
+          "status": "To Do",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": null,
+          "typeName": "Subtask",
+          "created": "2025-09-24T17:08:13.836+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-45",
+          "summary": "テストケースの作成",
+          "status": "To Do",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": null,
+          "typeName": "Subtask",
+          "created": "2025-09-24T17:08:13.835+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-44",
+          "summary": "テスト環境の準備",
+          "status": "To Do",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": null,
+          "typeName": "Subtask",
+          "created": "2025-09-24T17:08:13.838+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-47",
+          "summary": "受け入れテストの実施",
+          "status": "To Do",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": null,
+          "typeName": "Subtask",
+          "created": "2025-09-24T17:08:13.867+0900",
+          "startedAt": null,
+          "completedAt": null
+        }
+      ],
+      "doneCount": 0,
+      "totalSubtasks": 4
     }
   ],
   "totals": {
     "parents": 9,
     "subtasks": 45,
-    "done": 22,
-    "notDone": 23
+    "done": 27,
+    "notDone": 18
   }
 }

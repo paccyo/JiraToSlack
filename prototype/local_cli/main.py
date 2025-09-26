@@ -920,28 +920,34 @@ def draw_png(
             g.rectangle([x0, y0, x0 + w, y0 + h], outline=col_outline, fill=(250, 250, 250))
             g.text((x0 + 8, y0 + 8), "データなし", font=font_sm, fill=(120, 120, 120))
             return
-        pad = 10
+        pad_left = 10
+        pad_right = 10
+        pad_bottom = 10
+        pad_top = 28  # 上部余白を拡大（タイトル＋ラベル分）
+        pad = 10  # 予測部分で使用
         gx0, gy0 = x0, y0
         gx1, gy1 = x0 + w, y0 + h
         g.rectangle([gx0, gy0, gx1, gy1], outline=col_outline, fill=(250, 250, 250))
         # axes
-        g.line([gx0 + pad, gy1 - pad, gx1 - pad, gy1 - pad], fill=col_outline)
-        g.line([gx0 + pad, gy0 + pad, gx0 + pad, gy1 - pad], fill=col_outline)
+        g.line([gx0 + pad_left, gy1 - pad_bottom, gx1 - pad_right, gy1 - pad_bottom], fill=col_outline)
+        g.line([gx0 + pad_left, gy0 + pad_top, gx0 + pad_left, gy1 - pad_bottom], fill=col_outline)
         # scale
-        rems = [float(x.get("remaining") or 0.0) for x in series]
+        # 実績データは全てのtimeSeriesデータをグラフに反映
+        filtered_series = series
+        rems = [float(x.get("remaining") or 0.0) for x in filtered_series]
         maxv = max(rems) if rems else 1.0
         maxv = max(maxv, 1.0)
-        n = len(series)
+        n = len(filtered_series)
         def _get_date(i: int) -> Optional[str]:
-            d = series[i].get("date") or series[i].get("day") or series[i].get("time")
+            d = filtered_series[i].get("date") or filtered_series[i].get("day") or filtered_series[i].get("time")
             return fmt_date(str(d)) if d else None
         def pt(idx: int, val: float) -> Tuple[int, int]:
             if n <= 1:
                 t = 0.0
             else:
                 t = idx / (n - 1)
-            X = int((gx0 + pad) + t * (w - 2 * pad))
-            Y = int((gy1 - pad) - (val / maxv) * (h - 2 * pad))
+            X = int((gx0 + pad_left) + t * (w - pad_left - pad_right))
+            Y = int((gy1 - pad_bottom) - (val / maxv) * (h - pad_top - pad_bottom))
             return X, Y
         # ideal dotted (legend: gray dotted); compute when missing
         if not ideal and n >= 2:
@@ -949,7 +955,7 @@ def draw_png(
             ideal = [{"remaining": start_rem * (1 - i / (n - 1))} for i in range(n)]
         # build points
         pts_i = [pt(i, float(v.get("remaining") or 0.0)) for i, v in enumerate(ideal[:n])] if ideal else []
-        pts = [pt(i, float(v.get("remaining") or 0.0)) for i, v in enumerate(series)]
+        pts = [pt(i, float(v.get("remaining") or 0.0)) for i, v in enumerate(filtered_series)]
         # shade gap between ideal and actual (red when behind => actual above ideal)
         if pts_i and pts and len(pts) == len(pts_i):
             for i in range(1, len(pts)):
@@ -979,8 +985,8 @@ def draw_png(
         for i in range(1, len(pts)):
             g.line([pts[i-1], pts[i]], fill=(0, 120, 210), width=3)
         # Title and its bbox for collision checks
-        title_pos = (gx0 + pad, gy0)
-        title_txt = "バーンダウン（実績/理想/予測）"
+        title_pos = (gx0 + pad_left, gy0 + 2)  # 上部余白内にタイトルを描画
+        title_txt = "バーンダウン（未完了タスク推移）"
         g.text(title_pos, title_txt, font=font_md, fill=col_text)
         try:
             title_bb = g.textbbox(title_pos, title_txt, font=font_md)
@@ -988,8 +994,8 @@ def draw_png(
             title_bb = (title_pos[0], title_pos[1], title_pos[0] + int(g.textlength(title_txt, font=font_md)), title_pos[1] + getattr(font_md, "size", 14))
         # axis labels (Y ticks and X dates)
         for frac in (0.0, 0.5, 1.0):
-            x = gx0 + pad
-            y = int((gy1 - pad) - frac * (h - 2 * pad))
+            x = gx0 + pad_left
+            y = int((gy1 - pad_bottom) - frac * (h - pad_top - pad_bottom))
             g.line([x - 4, y, x + 4, y], fill=col_outline)
             val = int(round(maxv * frac))
             g.text((x - 8 - g.textlength(str(val), font=font_sm), y - 6), str(val), font=font_sm, fill=col_text)
@@ -999,13 +1005,14 @@ def draw_png(
                 lx, _ = pt(idx, 0)
                 dlab = _get_date(idx)
                 if dlab:
-                    g.text((lx - 10, gy1 - pad + 2), dlab, font=font_sm, fill=col_text)
+                    g.text((lx - 10, gy1 - pad_bottom + 2), dlab, font=font_sm, fill=col_text)
         # latest remaining label
         try:
-            last_val = float(series[-1].get("remaining") or 0.0)
-            lx, ly = pts[-1]
-            lbl = f"残: {last_val:.1f}"
-            g.text((lx + 6, ly - 10), lbl, font=font_sm, fill=(0, 120, 210))
+            if pts:
+                last_val = float(filtered_series[-1].get("remaining") or 0.0)
+                lx, ly = pts[-1]
+                lbl = f"残: {last_val:.1f}"
+                g.text((lx + 6, ly - 10), lbl, font=font_sm, fill=(0, 120, 210))
         except Exception:
             pass
         # forecast: simple linear regression on (i, remaining) -> predict zero
@@ -1513,8 +1520,11 @@ def draw_png(
             return
         # header
         # 課題列にサマリーも併記するため幅を広げる
-        col_w = [int(w*0.28), int(w*0.14), int(w*0.14), int(w*0.34), int(w*0.10)]
-        headers = ["課題", "担当者", "ステータス", "重要な理由", "リンク"]
+        # 課題/担当者/ステータス/理由/リンクの比率を調整してリンク列の開始位置を左へ寄せる
+        # リンクは短縮表示するが、開始位置が左に来るよう最後の2列を縮める
+        # 列幅: リンクを最左・最大幅、他は最小限
+        col_w = [int(w*0.40), int(w*0.18), int(w*0.12), int(w*0.18), int(w*0.12)]
+        headers = ["リンク", "課題", "担当者", "ステータス", "重要な理由"]
         cx = x0
         y = y0
         g.rectangle([x0, y0, x0 + w, y0 + h], outline=col_outline, fill=(250, 250, 250))
@@ -1525,21 +1535,37 @@ def draw_png(
             g.text((cx, y_row), head, font=font_sm, fill=col_text)
             cx += col_w[i]
         y_row += 20
-        # rows
-        for row in ev:
+        # data rows
+        for e in ev:
             cx = x0 + 8
-            key_summary = str(row.get("key") or "")
-            summ = str(row.get("summary") or "").strip()
-            if summ:
-                key_summary = f"{key_summary} {summ}"
-            vals = [key_summary, row.get("assignee"), row.get("status"), row.get("why"), row.get("link")]
-            for i, val in enumerate(vals):
-                cell_w = col_w[i] - 10
-                txt = trim_to_width(str(val or ""), cell_w, font_sm)
-                g.text((cx, y_row), txt, font=font_sm, fill=(30, 30, 30))
-                cx += col_w[i]
-            y_row += 20
-
+            # リンク（全表示、はみ出し時は末尾...）
+            raw_link = str(e.get('link', '')).replace('https://', '').replace('http://', '')
+            link = raw_link
+            while g.textlength(link, font=font_sm) > (col_w[0] - 12) and len(link) > 4:
+                link = link[:-1]
+            if g.textlength(link, font=font_sm) > (col_w[0] - 12):
+                link = link[:max(0, len(link)-3)] + '...'
+            g.text((cx, y_row), link, font=font_sm, fill=col_text)
+            cx += col_w[0]
+            # 課題: key + summary (truncated)
+            key_sum = f"{e.get('key', '')} {e.get('summary', '')[:20]}".strip()
+            g.text((cx, y_row), key_sum, font=font_sm, fill=col_text)
+            cx += col_w[1]
+            # 担当者
+            assignee = e.get('assignee', '')[:10]
+            g.text((cx, y_row), assignee, font=font_sm, fill=col_text)
+            cx += col_w[2]
+            # ステータス
+            status = e.get('status', '')[:10]
+            g.text((cx, y_row), status, font=font_sm, fill=col_text)
+            cx += col_w[3]
+            # 重要な理由
+            why = e.get('why', '')[:20]
+            g.text((cx, y_row), why, font=font_sm, fill=col_text)
+            cx += col_w[4]
+            y_row += 16
+            if y_row > y0 + h - 10:
+                break  # prevent overflow
     ev_box_x0 = left_col_x0
     ev_box_y0 = max(tis_y1, st_y1) + 40
     ev_box_w = W - padding - ev_box_x0

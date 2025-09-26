@@ -60,7 +60,7 @@ def main() -> int:
     end_date = parse_iso(sprint.get("endDate"))
 
     # Fetch sprint issues with needed fields
-    fields = ["summary", "status", "issuetype"]
+    fields = ["summary", "status", "issuetype", "subtasks"]
     unit = (args.unit or "points").lower()
     if unit == "points":
         sp_field = jc.resolve_story_points_field()
@@ -68,10 +68,21 @@ def main() -> int:
     else:
         sp_field = None
 
-    code, issues, err = jc.search_paginated(f"Sprint={sprint_id}", fields=fields, batch=100)
+    # Get parent issues in sprint
+    code, parents, err = jc.search_paginated(f"Sprint={sprint_id} AND type not in subTaskIssueTypes()", fields=fields, batch=100)
     if code != 200:
-        print(err or "スプリントの課題取得に失敗", file=sys.stderr)
+        print(err or "スプリントの親課題取得に失敗", file=sys.stderr)
         return 1
+
+    # Collect all subtasks
+    issues = []
+    for parent in parents:
+        subtasks = (parent.get("fields") or {}).get("subtasks") or []
+        for sub in subtasks:
+            # Fetch full subtask details
+            code_s, data_s, _ = jc.api_get(f"{jc.domain}/rest/api/3/issue/{sub.get('key')}", params={"fields": ",".join(fields)})
+            if code_s == 200 and data_s:
+                issues.append(data_s)
 
     # Build per-issue weights and done dates
     done_dates: List[Tuple[datetime, float]] = []

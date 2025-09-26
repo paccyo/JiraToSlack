@@ -44,7 +44,8 @@ def main() -> int:
                 continue
         if not names:
             return None, None, None, "サブタスク種別が見つかりません"
-        quoted = ",".join([f'"{n.replace('"', '\\"')}"' for n in names])
+        escaped_names = [n.replace('"', '\\"') for n in names]
+        quoted = ",".join([f'"{en}"' for en in escaped_names])
         jql_total = f"project={key} AND type in ({quoted})"
         jql_done = f"{jql_total} AND statusCategory = \"Done\""
         jql_open = f"{jql_total} AND statusCategory != \"Done\""
