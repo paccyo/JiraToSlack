@@ -22,3 +22,23 @@ def register_commands(app):
         command_jira_get_tasks_repository = Command_Jira_Get_Tasks_Responce()
         responce = command_jira_get_tasks_repository.execute(body)
         say(responce)
+
+    from . import run_jira_backlog_dashboard
+
+    @app.command("/jira_backlog_report")
+    def handle_jira_backlog_report_command(ack, body, say):
+        ack()
+        user_query = body["text"]
+        say(f"user query: {user_query}")
+        say("処理中...")
+        image_path = run_jira_backlog_dashboard()
+        if image_path:
+            # Slack APIで画像ファイルをアップロード
+            app.client.files_upload(
+                channels=body["channel_id"],
+                file=image_path,
+                title="Jiraバックログダッシュボード"
+            )
+            say("画像を送信しました")
+        else:
+            say("画像生成に失敗しました")

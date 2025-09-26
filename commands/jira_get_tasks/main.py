@@ -13,12 +13,13 @@ class CommandJiraGetTasksRepository:
         self.model = genai.GenerativeModel('gemini-2.5-flash')
 
     def execute(self, body):
-    text = body["text"]
-    system_prompt = get_system_prompt_generate_jql()
-    try:
+        text = body["text"]
+        system_prompt = get_system_prompt_generate_jql()
+        try:
             response = self.model.generate_content(
                 contents=text,
                 system_instruction=system_prompt
+            )
             clean_json_str = re.search(r"\{.*\}", response.text, re.DOTALL).group(0)
             gemini_result = json.loads(clean_json_str)
             print(f"gemini result: \n{gemini_result}")
@@ -34,12 +35,12 @@ class CommandJiraGetTasksRepository:
             except Exception as e:
                 return f"Request JQL error:{e}"
         except Exception as e:
-        return f"An error occurred: {e}"
+            return f"An error occurred: {e}"
 
     def format_jira_issue_for_slack(self, issue):
-    issue_url = issue.permalink()
-    assignee_name = issue.fields.assignee.displayName if issue.fields.assignee else "未割り当て"
-    status_name = issue.fields.status.name
+        issue_url = issue.permalink()
+        assignee_name = issue.fields.assignee.displayName if issue.fields.assignee else "未割り当て"
+        status_name = issue.fields.status.name
         blocks = [
             {"type": "divider"},
             {
@@ -66,14 +67,13 @@ if __name__ == "__main__":
     repository = CommandJiraGetTasksRepository()
     print(f"request query:{query}")
     print(repository.execute(body={"text": query}))
-=======
+
 from prompts import get_system_prompt_generate_jql, JQLQuerySchema
 from request_jql import RequestJqlRepository
 
 # from commands.jira_get_tasks.prompts import get_system_prompt_generate_jql, JQLQuerySchema
 # from commands.jira_get_tasks.request_jql import RequestJqlRepository
 
->>>>>>> b04d81c (update: gemini responce schema and system prompt)
 import os
 import google.generativeai as genai
 
