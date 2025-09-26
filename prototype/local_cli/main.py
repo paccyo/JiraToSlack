@@ -27,6 +27,9 @@ def maybe_load_dotenv() -> None:
         Path.cwd() / ".env",                          # current working dir
         Path(__file__).resolve().parents[2] / ".env",  # repo root (best-effort)
     ]
+    # --- 以下はダッシュボード画像生成・各種集計・ファイル出力の主要処理 ---
+    # 各関数・内部処理の目的や流れを日本語コメントで詳細に記述しています。
+
     for p in candidates:
         try:
             if p.exists():
@@ -46,6 +49,9 @@ def _sanitize_api_key(raw: Optional[str]) -> Optional[str]:
     if start >= 0:
         s = s[start:]
     # Allowed chars for Google API keys (alnum, '-', '_')
+    # このファイルはJiraデータを取得し、スプリントダッシュボード画像を生成するメインスクリプトです。
+    # 各関数・主要処理の内部ロジックや目的を日本語コメントで詳細に記述しています。
+
     allowed = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_')
     out = []
     for ch in s:
@@ -61,6 +67,8 @@ def _sanitize_api_key(raw: Optional[str]) -> Optional[str]:
 def get_json_from_script(script_path: str, env_extra: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     env = os.environ.copy()
     if env_extra:
+    # .envファイルを複数パスから読み込む。Jira認証や各種設定値を環境変数としてセット。
+    # ログ出力が有効な場合は読み込んだ.envパスを表示。
         env.update(env_extra)
     env["OUTPUT_JSON"] = "1"
     env["PYTHONUTF8"] = "1"
@@ -83,6 +91,7 @@ def get_json_from_script(script_path: str, env_extra: Optional[Dict[str, str]] =
 
 def get_json_from_script_args(script_path: str, args: List[str], env_extra: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     env = os.environ.copy()
+    # Google APIキーの正規化。不要な記号やコメントを除去し、'AIza'以降の有効部分のみ抽出。
     if env_extra:
         env.update(env_extra)
     env["OUTPUT_JSON"] = "1"
@@ -103,6 +112,8 @@ def get_json_from_script_args(script_path: str, args: List[str], env_extra: Opti
     line = proc.stdout.strip().splitlines()[-1]
     return json.loads(line)
 
+    # 指定Pythonスクリプトをサブプロセスで実行し、JSON出力を取得。
+    # env_extraで追加環境変数を渡せる。失敗時は例外。
 
 def api_get(url: str, auth: HTTPBasicAuth, params: Optional[Dict[str, Any]] = None) -> Tuple[int, Optional[Dict[str, Any]], str]:
     try:
@@ -125,6 +136,8 @@ def api_get(url: str, auth: HTTPBasicAuth, params: Optional[Dict[str, Any]] = No
         return resp.status_code, None, resp.text
 
 
+    # 引数付きPythonスクリプトをサブプロセスで実行し、JSON出力を取得。
+    # env_extraで追加環境変数を渡せる。失敗時は例外。
 def search_issue_keys(JIRA_DOMAIN: str, auth: HTTPBasicAuth, jql: str, limit: int = 10) -> List[str]:
     try:
         url = f"{JIRA_DOMAIN}/rest/api/3/search"
@@ -147,6 +160,8 @@ def resolve_board(JIRA_DOMAIN: str, auth: HTTPBasicAuth) -> Tuple[int, Optional[
     if board_id and not board_id.isdigit():
         params: Dict[str, Any] = {"maxResults": 50}
         if project_key:
+    # Jira REST API GETリクエスト。認証・パラメータ付きで実行し、JSONレスポンスを返す。
+    # ステータスコード・データ・エラー文字列を返す。
             params["projectKeyOrId"] = project_key
         code, data, err = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/board", auth, params=params)
         if code != 200 or not data:
@@ -167,6 +182,7 @@ def resolve_board(JIRA_DOMAIN: str, auth: HTTPBasicAuth) -> Tuple[int, Optional[
             partial = [x for x in items2 if board_id.lower() in str(x.get("name", "")).lower()]
             if partial:
                 return 200, partial[0], ""
+    # JQLで課題キー一覧を取得。最大件数limit指定可。
         return 404, None, f"ボード名 '{board_id}' は見つかりませんでした"
 
     params: Dict[str, Any] = {"maxResults": 50}
@@ -178,6 +194,7 @@ def resolve_board(JIRA_DOMAIN: str, auth: HTTPBasicAuth) -> Tuple[int, Optional[
     if code != 200:
         return code, None, f"ボード一覧取得に失敗: {err}"
     code2, data2, err2 = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/board", auth, params={"maxResults": 50})
+    # Jiraボード情報を取得。ID/名前/プロジェクトキーで検索し、最適なボードを返す。
     if code2 == 200 and data2 and data2.get("values"):
         return 200, data2.get("values")[0], ""
     return 404, None, "ボードが見つかりませんでした"
@@ -223,6 +240,7 @@ def count_active_sprints_for_board(JIRA_DOMAIN: str, auth: HTTPBasicAuth, board_
         return n if n > 0 else 1
     return 1
 
+    # ボード情報からプロジェクトキーを推定。location.projectKey優先、なければAPIで詳細取得。
 
 def resolve_active_sprint(JIRA_DOMAIN: str, auth: HTTPBasicAuth, board_id: int) -> Optional[Dict[str, Any]]:
     code, data, _ = api_get(
@@ -241,6 +259,7 @@ def resolve_active_sprint(JIRA_DOMAIN: str, auth: HTTPBasicAuth, board_id: int) 
     return None
 
 
+    # プロジェクトに紐づくボード数を取得。
 def approximate_count(JIRA_DOMAIN: str, auth: HTTPBasicAuth, jql: str) -> Tuple[int, Optional[int], str]:
     url = f"{JIRA_DOMAIN}/rest/api/3/search/approximate/count"
     code, data, err = api_get(url, auth, params={"jql": jql})
@@ -250,6 +269,7 @@ def approximate_count(JIRA_DOMAIN: str, auth: HTTPBasicAuth, jql: str) -> Tuple[
             return 200, cnt, ""
         except Exception:
             pass
+    # ボードIDからアクティブスプリント数を取得。
     return code, None, err
 
 
@@ -261,6 +281,7 @@ def search_count(JIRA_DOMAIN: str, auth: HTTPBasicAuth, jql: str) -> Tuple[int, 
         resp = requests.get(
             f"{JIRA_DOMAIN}/rest/api/3/search",
             auth=auth,
+    # ボードIDからアクティブスプリント情報を取得。
             headers={"Accept": "application/json"},
             params={"jql": jql, "startAt": 0, "maxResults": 0, "fields": "none"},
             timeout=30,
@@ -277,6 +298,7 @@ def search_count(JIRA_DOMAIN: str, auth: HTTPBasicAuth, jql: str) -> Tuple[int, 
         return 200, None, f"JSON解析失敗: {e}"
 
 
+    # JQLで近似件数を取得（高速）。
 def agile_sprint_count(JIRA_DOMAIN: str, auth: HTTPBasicAuth, sprint_id: int, jql_filter: Optional[str] = None) -> Tuple[int, Optional[int], str]:
     """Count issues in a sprint via Agile API without fetching items.
     Uses maxResults=0 for efficiency. Optional JQL filter applies on top.
@@ -288,6 +310,7 @@ def agile_sprint_count(JIRA_DOMAIN: str, auth: HTTPBasicAuth, sprint_id: int, jq
         resp = requests.get(
             f"{JIRA_DOMAIN}/rest/agile/1.0/sprint/{int(sprint_id)}/issue",
             auth=auth,
+    # JQLで正確な件数を取得（maxResults=0で高速）。
             headers={"Accept": "application/json"},
             params=params,
             timeout=30,
@@ -311,6 +334,7 @@ def try_load_font(size: int) -> ImageFont.ImageFont:
             r"C:\\Windows\\Fonts\\meiryo.ttc",       # Meiryo (日本語)
             r"C:\\Windows\\Fonts\\YuGothR.ttc",      # Yu Gothic Regular
             r"C:\\Windows\\Fonts\\YuGothM.ttc",      # Yu Gothic Medium
+    # Agile APIでスプリント内件数を取得。JQLフィルタも指定可。
             r"C:\\Windows\\Fonts\\msgothic.ttc",     # MS Gothic
             r"C:\\Windows\\Fonts\\msmincho.ttc",     # MS Mincho
             r"C:\\Windows\\Fonts\\segoeui.ttf",      # Fallback (英数字)
@@ -337,6 +361,7 @@ def try_load_font(size: int) -> ImageFont.ImageFont:
 
 
 def fmt_date(dt_str: Optional[str]) -> Optional[str]:
+    # OSごとに日本語フォントを優先してロード。見つからなければデフォルト。
     if not dt_str:
         return None
     try:
@@ -368,6 +393,7 @@ def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Opt
         fallback_model = os.getenv("GEMINI_MODEL_FALLBACK", "gemini-1.5-flash")
         try:
             timeout_s = float(os.getenv("GEMINI_TIMEOUT", "25"))
+    # 日付文字列をYYYY/MM/DD形式に変換。複数フォーマット対応。
         except Exception:
             timeout_s = 25.0
         try:
@@ -418,16 +444,31 @@ def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Opt
             """
         )
         
+        # 担当者名リストをcontextから抽出（例: context["assignees"]）
+        assignees = context.get("assignees")
+        if not assignees:
+            # サブタスクや親タスクから担当者名を抽出
+            names = set()
+            for parent in context.get("parents", []):
+                if parent.get("assignee"):
+                    names.add(parent["assignee"])
+                for sub in parent.get("subtasks", []):
+                    if sub.get("assignee"):
+                        names.add(sub["assignee"])
+            assignees = sorted(names)
+            context["assignees"] = assignees
+        assignee_str = ", ".join(assignees) if assignees else "(担当者なし)"
         output_format = dedent(
-            """
+            f"""
             ## 🎯 結論（1行断言）
             完了率[X%] - [順調✅/注意⚠️/危険🚨] 残[Y]日で目標[Z%]（[理由5字以内]）
-
+            
             ## 🚨 即実行アクション（重要順3つ）
+            ※担当者名は必ず以下のリストから選択してください: {assignee_str}
             1. [担当者] → [タスク] （[期限]）
             2. [担当者] → [タスク] （[期限]） 
             3. [担当者] → [タスク] （[期限]）
-
+            
             ## 📊 根拠（2行以内）
             • データ: 完了[X]/全[Y]件、必要消化[Z]件/日（実績[W]件/日）
             • 問題: [最大リスク] + [ボトルネック] = [影響度数値]
