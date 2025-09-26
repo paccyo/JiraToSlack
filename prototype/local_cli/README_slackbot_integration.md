@@ -12,6 +12,42 @@
 
 ---
 
+### 【現状調査・確認結果】
+
+1. SlackBotの開発環境
+
+   - Python（slack_bolt/slack_sdk）での実装例・推奨あり。
+   - main.pyやBot起動例もPythonベース。
+
+2. Botトークン・認証情報の管理
+
+   - .envファイルで `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `JIRA_API_TOKEN` などを管理。
+   - main.pyやBotサンプルも `os.getenv()` で認証情報取得。
+
+3. main.pyのダッシュボード生成
+
+   - `python -X utf8 prototype/local_cli/main.py` で `sprint_overview.png`・`sprint_overview_report.md` などが正常生成されることを確認済み。
+   - 画像・Markdown・JSON出力は正常。
+
+4. Botのファイルアップロード権限
+
+   - 実装例で `files_upload` APIを使用。Botに `files:write` 権限が必要。
+   - Slack管理画面で権限追加が必要（未設定の場合はアップロード不可）。
+
+5. 生成物の保存先・一時ファイル管理
+   - 生成物は `prototype/local_cli/` 配下に保存。
+   - 一時ファイル管理や古いファイル削除は運用設計次第（拡張ポイントとして記載あり）。
+
+---
+
+【結論】
+
+- すべての確認事項は現状の設計・コードで対応可能。
+- Bot権限（files:write等）はSlack管理画面で事前設定が必要。
+- 生成物の保存先・一時ファイル管理は運用設計に応じて追加可能。
+
+---
+
 ## 2. 実装内容（全体像）
 
 ### 2-1. SlackBotの基本構築
