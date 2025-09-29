@@ -1,12 +1,5 @@
-<<<<<<< HEAD
-from commands.jira.main import Command_Jira_Responce
-from commands.jira_get_tasks.main import Command_Jira_Get_Tasks_Responce
-from commands.add_user.main import Command_Add_User_Responce
-from commands.del_user.main import Command_Del_User_Responce
-=======
 from commands.jira.main import CommandJiraRepository
 from commands.jira_get_tasks.main import CommandJiraGetTasksRepository
->>>>>>> develop
 
 
 def register_commands(app):
