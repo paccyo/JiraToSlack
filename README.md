@@ -158,9 +158,23 @@ gcloud eventarc triggers create $TRIGGER_NAME \
   --destination-run-region=$LOCATION \
   --event-filters="type=google.cloud.pubsub.topic.v1.messagePublished" \
   --event-filters="topic=$TOPIC_NAME"
-```
 
-**重要**: 初回作成時に、Eventarcが使用するサービスアカウントに必要な権限を付与するよう求められる場合があります。指示に従って権限を付与してください。
+#### 必要な権限について
+
+`gcloud`コマンドが自動で権限付与を促してくれますが、裏側では以下の権限が付与されています。
+
+1.  **Cloud Run 起動元 (`roles/run.invoker`)**
+    -   **誰が**: Eventarcが利用するサービスアカウント
+    -   **何に**: デプロイしたCloud Function (`jira-slack-bot`)に対して
+    -   **なぜ**: EventarcがCloud FunctionのHTTPエンドポイントを「呼び出す（起動する）」ためにこの権限が必要です。
+
+2.  **サービスアカウントトークン作成者 (`roles/iam.serviceAccountTokenCreator`)**
+    -   **誰が**: Googleが管理するPub/Subのサービスアカウント
+    -   **何に**: Eventarcが利用するサービスアカウントに対して
+    -   **なぜ**: Pub/SubからEventarc経由でCloud Functionを呼び出す際、リクエストが正当なものであることを証明するためのIDトークンを作成する権限です。
+
+基本的には、`gcloud`が権限付与を求めてきた際に`yes`と答えるだけで、これらの設定は自動的に完了します。
+
 
 ### ステップ3: Cloud Scheduler の設定
 
