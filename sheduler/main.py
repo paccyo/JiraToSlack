@@ -82,13 +82,10 @@ class SchedulerTaskHandler:
                         
                         upcoming_tasks = sorted(tasks_with_duedate, key=duedate_sort_key)[:3]
                         if upcoming_tasks:
-                            # 優先度タスクと重複している可能性のあるものを除く
-                            upcoming_tasks_filtered = [task for task in upcoming_tasks if task not in high_priority_tasks]
-                            if upcoming_tasks_filtered:
-                                found_any_tasks = True
-                                blocks.append({"type": "header", "text": {"type": "plain_text", "text": "期日が近いタスク"}})
-                                for issue in upcoming_tasks_filtered:
-                                    blocks.extend(request_jql_repository.format_jira_issue_for_slack(issue))
+                            found_any_tasks = True
+                            blocks.append({"type": "header", "text": {"type": "plain_text", "text": "期日が近いタスク"}})
+                            for issue in upcoming_tasks:
+                                blocks.extend(request_jql_repository.format_jira_issue_for_slack(issue))
 
                     if not found_any_tasks:
                         blocks.append({

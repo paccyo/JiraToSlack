@@ -23,11 +23,15 @@ def get_system_prompt_generate_jql() -> str:
     text (キーワード検索用)
     duedate (期限)
     created (作成日)
+    resolved (完了日)
+    orderBy (ソート順)
+    limit (表示件数)
     ユーザーのリクエストに該当する項目がない場合、そのキーの値は null としてください。
     比較演算子（=, !=, <, >, <=, >=, in, not in）が必要な項目は、{"operator": "演算子", "value": "値"} の形式で表現してください。
 
     # 解釈ルール (Interpretation Rules)
     担当者 (assignee) / 報告者 (reporter):
+    指定のない場合: "currentUser()"
     「私」「自分」など: "currentUser()"
     「担当者なし」「未割り当て」: "isEmpty()"
     特定の人名（例: 「田中さん」）: "田中"
@@ -53,7 +57,7 @@ def get_system_prompt_generate_jql() -> str:
     タスクのステータスに対して特に指定のない場合、以下のようにします。
     {"operator": "in", "value": ["To Do", IN_progress]}
 
-    期限 (duedate) / 作成日 (created) / 完了日 (completed):
+    期限 (duedate) / 作成日 (created) / 完了日 (resolved):
     「今日」: {"operator": "<=", "value": "endOfDay()"}
     「今週」: {"operator": "<=", "value": "endOfWeek()"}
     「今月」: {"operator": "<=", "value": "endOfMonth()"}
@@ -62,11 +66,17 @@ def get_system_prompt_generate_jql() -> str:
     「今日 12:00から14:00」: {"operator": "between", "value": ["startOfDay(\"12:00\")", "startOfDay(\"14:00\")"]}
     「今日 12:00から」: {"operator": ">=", "value": "startOfDay(\"12:00\")"}
     「今日の14:00まで」: {"operator": "<=", "value": "startOfDay(\"14:00\")"}
+    「完了した」など、日付の指定なく完了済みを指す場合: {"operator": "is not", "value": "EMPTY"}
 
     優先度 (priority):
     「高い」「重要」: {"operator": ">=", "value": "High"}
     「普通」: {"operator": "=", "value": "Medium"}
     「低い」: {"operator": "<=", "value": "Low"}
+
+    ソート順 (orderBy) と 表示件数 (limit):
+    「期日の近いタスク」: `orderBy` を `duedate ASC` に設定し、`limit` が指定されていなければデフォルトで `3` を設定します。
+    「優先度の高いタスク」: `orderBy` を `priority DESC` に設定し、`limit` が指定されていなければデフォルトで `3` を設定します。
+    「5つのタスク」「10件表示して」のようにユーザーが数値を指定した場合、その数値を `limit` に設定します。
 
     課題タイプ (issuetype):
     「バグ」「不具合」: "Bug"
@@ -93,11 +103,37 @@ def get_system_prompt_generate_jql() -> str:
     "text": null,
     "duedate": null,
     "created": null,
-    "completed": {
+    "resolved": {
         "operator": "between",
         "value": ["startOfDay(\"12:00\")", "startOfDay(\"14:00\")"]
+    },
+    "orderBy": null,
+    "limit": null
     }
+    ```
+
+    例2
+    ユーザー指示: 「期日の近い5つのタスク」
+    あなたの出力:
+    ```json
+    {
+    "project": null,
+    "reporter": null,
+    "assignee": "currentUser()",
+    "issuetype": null,
+    "status": {
+        "operator": "in",
+        "value": ["To Do", "IN_progress"]
+    },
+    "priority": null,
+    "text": null,
+    "duedate": null,
+    "created": null,
+    "resolved": null,
+    "orderBy": "duedate ASC",
+    "limit": 5
     }
+    ```
 """
 
 class Condition(BaseModel):
@@ -114,5 +150,7 @@ class JQLQuerySchema(BaseModel):
     text: Optional[str] = None
     duedate: Optional[Condition] = None
     created: Optional[Condition] = None
-    compreated: Optional[Condition] = None
+    resolved: Optional[Condition] = None
+    orderBy: Optional[str] = None
+    limit: Optional[int] = None
 

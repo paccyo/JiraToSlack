@@ -22,12 +22,11 @@ class RequestJqlRepository:
             return None
 
 
-    def execute(self, query):
+    def execute(self, query, max_results=False):
         print(f"request jql query: \n{query}")
         try:
             # JQLを実行して課題を検索
-            # maxResults=False を指定すると、件数上限なしで全件取得します
-            searched_issues = self.jira_client.search_issues(query, maxResults=False)
+            searched_issues = self.jira_client.search_issues(query, maxResults=max_results)
             print("✅ 検索が完了しました。")
             return searched_issues
         except Exception as e:
@@ -41,12 +40,12 @@ class RequestJqlRepository:
         # JQL内で引用符で囲む必要のない特別なキーワードや関数を定義
         jql_keywords = {
             "currentUser()", "isEmpty()", "now()", "endOfDay()", "endOfWeek()",
-            "startOfMonth()", "Highest", "High", "Medium", "Low", "Lowest"
+            "startOfMonth()", "Highest", "High", "Medium", "Low", "Lowest", "EMPTY"
         }
 
         process_order = [
             "project", "reporter", "assignee", "issuetype", "status",
-            "priority", "text", "duedate", "created"
+            "priority", "text", "duedate", "created", "resolved"
         ]
 
         for field in process_order:
@@ -74,9 +73,18 @@ class RequestJqlRepository:
 
                 if op_value is None:
                     continue
+
+                # BETWEEN 演算子の特別処理
+                if operator == "BETWEEN" and isinstance(op_value, list) and len(op_value) == 2:
+                    start_val, end_val = op_value
+                    # JQLのキーワードや関数でない場合は引用符で囲む
+                    formatted_start = start_val if start_val in jql_keywords else f'"{start_val}"'
+                    formatted_end = end_val if end_val in jql_keywords else f'"{end_val}"'
+                    conditions.append(f'{field} >= {formatted_start}')
+                    conditions.append(f'{field} <= {formatted_end}')
                 
                 # IN や NOT IN 演算子で、値がリストの場合
-                if operator in ["IN", "NOT IN"] and isinstance(op_value, list):
+                elif operator in ["IN", "NOT IN"] and isinstance(op_value, list):
                     # リストの各要素を引用符で囲み、カンマで連結
                     quoted_items = [f'"{item}"' for item in op_value]
                     formatted_value = f'({", ".join(quoted_items)})'
@@ -88,7 +96,13 @@ class RequestJqlRepository:
                     conditions.append(f'{field} {operator} {formatted_value}')
 
         # 全ての条件を " AND " で連結して返す
-        return " AND ".join(conditions)
+        jql_string = " AND ".join(conditions)
+
+        # orderBy があれば、JQLに追加
+        if data.get("orderBy"):
+            jql_string += f' ORDER BY {data.get("orderBy")}'
+
+        return jql_string
     
 
     def format_jira_issue_for_slack(self, issue):
