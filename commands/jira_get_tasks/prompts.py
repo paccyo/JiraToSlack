@@ -28,13 +28,16 @@ def get_system_prompt_generate_jql() -> str:
     limit (表示件数)
     ユーザーのリクエストに該当する項目がない場合、そのキーの値は null としてください。
     比較演算子（=, !=, <, >, <=, >=, in, not in）が必要な項目は、{"operator": "演算子", "value": "値"} の形式で表現してください。
+    期間（例：「昨日から今日まで」）を表す項目は、複数の条件オブジェクトをリストで表現してください。
 
     # 解釈ルール (Interpretation Rules)
     担当者 (assignee) / 報告者 (reporter):
-    指定のない場合: "currentUser()"
-    「私」「自分」など: "currentUser()"
-    「担当者なし」「未割り当て」: "isEmpty()"
-    特定の人名（例: 「田中さん」）: "田中"
+    - 能動態（「〜した」）で、主語が省略されている場合は、ユーザー自身 (`currentUser()`) が主語であると解釈します。例：「完了したタスク」 -> assignee: "currentUser()"
+    - 受動態（「〜された」）の場合は、担当者を指定しない (`null`) と解釈します。例：「完了されたタスク」 -> assignee: null
+    - 「私」「自分」などの一人称は `currentUser()` とします。
+    - 「担当者なし」は `isEmpty()` とします。
+    - 明示的に担当者が指定されている場合はその名前を設定します。
+    - 上記以外で担当者の指定がない場合は `currentUser()` をデフォルトとします。
 
     ステータス (status):
     以下のステータス名を認識し、ユーザーの入力と厳密に一致した場合はその値を設定します。
@@ -63,9 +66,9 @@ def get_system_prompt_generate_jql() -> str:
     「今月」: {"operator": "<=", "value": "endOfMonth()"}
     「期限切れ」: {"operator": "<", "value": "now()"}
     「今月作成」: {"operator": ">=", "value": "startOfMonth()"}
-    「今日 12:00から14:00」: {"operator": "between", "value": ["startOfDay(\"12:00\")", "startOfDay(\"14:00\")"]}
-    「今日 12:00から」: {"operator": ">=", "value": "startOfDay(\"12:00\")"}
-    「今日の14:00まで」: {"operator": "<=", "value": "startOfDay(\"14:00\")"}
+    「今日 12:00から13:00」: [{"operator": ">=", "value": "startOfDay('+12h')"}, {"operator": "<=", "value": "startOfDay('+13h')"}]
+    「今日 12:00から」: {"operator": ">=", "value": "startOfDay('+12h')"}
+    「今日の13:00まで」: {"operator": "<=", "value": "startOfDay('+13h')"}
     「完了した」など、日付の指定なく完了済みを指す場合: {"operator": "is not", "value": "EMPTY"}
 
     優先度 (priority):
@@ -87,7 +90,7 @@ def get_system_prompt_generate_jql() -> str:
     「"〇〇"に関する」「"〇〇"を含む」: "〇〇"
 
     例1
-    ユーザー指示: 「今日12:00から14:00の間に完了したタスク」
+    ユーザー指示: 「今日12:00から13:00の間に完了したタスク」
     あなたの出力:
     ```json
     {
@@ -103,10 +106,10 @@ def get_system_prompt_generate_jql() -> str:
     "text": null,
     "duedate": null,
     "created": null,
-    "resolved": {
-        "operator": "between",
-        "value": ["startOfDay(\"12:00\")", "startOfDay(\"14:00\")"]
-    },
+    "resolved": [
+        {"operator": ">=", "value": "startOfDay('+12h')"},
+        {"operator": "<=", "value": "startOfDay('+13h')"}
+    ],
     "orderBy": null,
     "limit": null
     }
@@ -148,9 +151,9 @@ class JQLQuerySchema(BaseModel):
     status: Optional[Condition] = None
     priority: Optional[Condition] = None
     text: Optional[str] = None
-    duedate: Optional[Condition] = None
-    created: Optional[Condition] = None
-    resolved: Optional[Condition] = None
+    duedate: Optional[Condition | List[Condition]] = None
+    created: Optional[Condition | List[Condition]] = None
+    resolved: Optional[Condition | List[Condition]] = None
     orderBy: Optional[str] = None
     limit: Optional[int] = None
 

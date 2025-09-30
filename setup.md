@@ -19,7 +19,10 @@ gcloud services enable \
     cloudbuild.googleapis.com \
     secretmanager.googleapis.com \
     cloudscheduler.googleapis.com \
-    artifactregistry.googleapis.com
+    artifactregistry.googleapis.com \
+    firestore.googleapis.com \
+    eventarc.googleapis.com \
+
 ```
 
 ## 3. Secret Managerにシークレットを保存
@@ -65,7 +68,7 @@ gcloud functions deploy slack-jira-bot \
 
 **注意:**
 - `--allow-unauthenticated` は、Cloud Schedulerからの呼び出しを許可するために設定していますが、よりセキュアにする場合は、サービスアカウント認証を構成してください。
-- `runtime` は `requirements.txt` に適合するバージョンを選択してください。
+
 
 デプロイが完了すると、関数のURL（`https://...`）が表示されます。このURLは次の手順で使用します。
 
