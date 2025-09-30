@@ -55,45 +55,44 @@ class RequestJqlRepository:
             if value is None:
                 continue
             
+            # 文字列の場合 (例: project = "MYPROJ")
             if isinstance(value, str):
-                # 'text'フィールドは'~'演算子を使用
                 if field == 'text':
                     conditions.append(f'text ~ "{value}"')
-
-                # その他のフィールドは'='演算子を使用
                 else:
-                    # 値が特別なキーワードでなければ引用符で囲む
-                    formatted_value = value if value in jql_keywords else f'"{value}"'
+                    is_function = '(' in value and ')' in value
+                    formatted_value = value if value in jql_keywords or is_function else f'"{value}"'
                     conditions.append(f'{field} = {formatted_value}')
 
-            # 値が比較演算子を持つオブジェクトの場合の処理
+            # 辞書の場合 (単一の条件)
             elif isinstance(value, dict):
                 operator = value.get("operator", "=").upper()
                 op_value = value.get("value")
 
                 if op_value is None:
                     continue
-
-                # BETWEEN 演算子の特別処理
-                if operator == "BETWEEN" and isinstance(op_value, list) and len(op_value) == 2:
-                    start_val, end_val = op_value
-                    # JQLのキーワードや関数でない場合は引用符で囲む
-                    formatted_start = start_val if start_val in jql_keywords else f'"{start_val}"'
-                    formatted_end = end_val if end_val in jql_keywords else f'"{end_val}"'
-                    conditions.append(f'{field} >= {formatted_start}')
-                    conditions.append(f'{field} <= {formatted_end}')
                 
-                # IN や NOT IN 演算子で、値がリストの場合
-                elif operator in ["IN", "NOT IN"] and isinstance(op_value, list):
-                    # リストの各要素を引用符で囲み、カンマで連結
+                if operator in ["IN", "NOT IN"] and isinstance(op_value, list):
                     quoted_items = [f'"{item}"' for item in op_value]
                     formatted_value = f'({", ".join(quoted_items)})'
                     conditions.append(f'{field} {operator} {formatted_value}')
-                
-                # その他の演算子で、値が文字列の場合
                 elif isinstance(op_value, str):
-                    formatted_value = op_value if op_value in jql_keywords else f'"{op_value}"'
+                    is_function = '(' in op_value and ')' in op_value
+                    formatted_value = op_value if op_value in jql_keywords or is_function else f'"{op_value}"'
                     conditions.append(f'{field} {operator} {formatted_value}')
+
+            # リストの場合 (複数の条件)
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, dict):
+                        operator = item.get("operator", "=").upper()
+                        op_value = item.get("value")
+                        if op_value is None:
+                            continue
+                        if isinstance(op_value, str):
+                            is_function = '(' in op_value and ')' in op_value
+                            formatted_value = op_value if op_value in jql_keywords or is_function else f'"{op_value}"'
+                            conditions.append(f'{field} {operator} {formatted_value}')
 
         # 全ての条件を " AND " で連結して返す
         jql_string = " AND ".join(conditions)
