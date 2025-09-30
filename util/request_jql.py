@@ -1,0 +1,173 @@
+import os
+from jira import JIRA
+from datetime import datetime
+
+class RequestJqlRepository:
+    def __init__(self):
+        # 環境変数の読み込み
+        JIRA_SERVER = os.getenv("JIRA_DOMAIN")
+        JIRA_EMAIL = os.getenv("JIRA_EMAIL")
+        JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN")
+        try:
+            # メールアドレスとAPIトークンで認証し、Jiraに接続
+            self.jira_client = JIRA(
+                server=JIRA_SERVER, 
+                basic_auth=(
+                    JIRA_EMAIL, 
+                    JIRA_API_TOKEN
+                )
+            )
+            print("✅ 認証に成功しました。")
+        except Exception as e:
+            print(f"❌ 認証に失敗しました: {e}")
+            return None
+
+
+    def execute(self, query, max_results=False):
+        print(f"request jql query: \n{query}")
+        try:
+            # JQLを実行して課題を検索
+            searched_issues = self.jira_client.search_issues(query, maxResults=max_results)
+            print("✅ 検索が完了しました。")
+            return searched_issues
+        except Exception as e:
+            print(f"❌ JQLの実行に失敗しました: {e}")
+            return None
+    
+    def build_jql_from_json(self, data: dict) -> str:
+
+        conditions = []
+
+        # JQL内で引用符で囲む必要のない特別なキーワードや関数を定義
+        jql_keywords = {
+            "currentUser()", "isEmpty()", "now()", "endOfDay()", "endOfWeek()",
+            "startOfMonth()", "Highest", "High", "Medium", "Low", "Lowest", "EMPTY"
+        }
+
+        process_order = [
+            "project", "reporter", "assignee", "issuetype", "status",
+            "priority", "text", "duedate", "created", "resolved"
+        ]
+
+        for field in process_order:
+            value = data.get(field)
+
+            # 値がnullの場合はスキップ
+            if value is None:
+                continue
+            
+            # 文字列の場合 (例: project = "MYPROJ")
+            if isinstance(value, str):
+                if field == 'text':
+                    conditions.append(f'text ~ "{value}"')
+                else:
+                    is_function = '(' in value and ')' in value
+                    formatted_value = value if value in jql_keywords or is_function else f'"{value}"'
+                    conditions.append(f'{field} = {formatted_value}')
+
+            # 辞書の場合 (単一の条件)
+            elif isinstance(value, dict):
+                operator = value.get("operator", "=").upper()
+                op_value = value.get("value")
+
+                if op_value is None:
+                    continue
+                
+                if operator in ["IN", "NOT IN"] and isinstance(op_value, list):
+                    quoted_items = [f'"{item}"' for item in op_value]
+                    formatted_value = f'({", ".join(quoted_items)})'
+                    conditions.append(f'{field} {operator} {formatted_value}')
+                elif isinstance(op_value, str):
+                    is_function = '(' in op_value and ')' in op_value
+                    formatted_value = op_value if op_value in jql_keywords or is_function else f'"{op_value}"'
+                    conditions.append(f'{field} {operator} {formatted_value}')
+
+            # リストの場合 (複数の条件)
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, dict):
+                        operator = item.get("operator", "=").upper()
+                        op_value = item.get("value")
+                        if op_value is None:
+                            continue
+                        if isinstance(op_value, str):
+                            is_function = '(' in op_value and ')' in op_value
+                            formatted_value = op_value if op_value in jql_keywords or is_function else f'"{op_value}"'
+                            conditions.append(f'{field} {operator} {formatted_value}')
+
+        # 全ての条件を " AND " で連結して返す
+        jql_string = " AND ".join(conditions)
+
+        # orderBy があれば、JQLに追加
+        if data.get("orderBy"):
+            jql_string += f' ORDER BY {data.get("orderBy")}'
+
+        return jql_string
+    
+
+    def format_jira_issue_for_slack(self, issue):
+        # 課題のURLを取得
+        issue_url = issue.permalink()
+
+        # 担当者がいるかどうかを確認
+        if issue.fields.assignee:
+            assignee_name = issue.fields.assignee.displayName
+        else:
+            assignee_name = "未割り当て"
+
+        # ステータス名を取得
+        status_name = issue.fields.status.name
+
+        # 優先度名を取得
+        priority_name = issue.fields.priority.name if issue.fields.priority else "なし"
+
+        # 期日を取得
+        due_date = issue.fields.duedate if issue.fields.duedate else "なし"
+
+        # 完了日を取得・フォーマット
+        if issue.fields.resolutiondate:
+            resolution_date_obj = datetime.strptime(issue.fields.resolutiondate, '%Y-%m-%dT%H:%M:%S.%f%z')
+            resolution_date = resolution_date_obj.strftime('%Y-%m-%d %H:%M')
+        else:
+            resolution_date = "未完了"
+
+        # Block KitのJSON構造を構築
+        blocks = [
+            {
+                "type": "divider" # 区切り線
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    # 課題の要約を太字にし、課題キーにURLをリンクさせる
+                    "text": f" *<{issue_url}|{issue.key}>: {issue.fields.summary}*"
+                }
+            },
+            {
+                "type": "context", # 補足情報セクション
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*ステータス*: {status_name}"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*担当者*: {assignee_name}"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*優先度*: {priority_name}"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*期日*: {due_date}"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*完了日*: {resolution_date}"
+                    }
+                ]
+            }
+        ]
+        return blocks
