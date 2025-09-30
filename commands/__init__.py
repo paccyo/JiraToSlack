@@ -1,3 +1,5 @@
+from commands.add_user.main import CommandAddUserResponce
+from commands.del_user.main import CommandDelUserResponce
 from commands.jira.main import CommandJiraRepository
 from commands.jira_get_tasks.main import CommandJiraGetTasksRepository
 
@@ -6,6 +8,35 @@ def register_commands(app):
     """
     Registers all slash commands with the provided app instance.
     """
+    @app.command("/add_user")                                                                                                                                                
+    def handle_add_user_command(ack, body, say, client):                                                                                                                   
+        ack()                                                                                                                                                                 
+        user_id = body["user_id"]                                                                                                                                              
+        user_name = body["user_name"]                                                                                                                                          
+
+        try:                                                                                                                                                                    
+            # ユーザーのメールアドレスを取得                                                                                                                                   
+            user_info = client.users_info(user=user_id)                                                                                                      
+            email = user_info["user"]["profile"]["email"]                                                                                                
+            # Firestoreに保存                                                                                                                                     
+            command_add_user_repository = CommandAddUserResponce()                                                                                          
+            response = command_add_user_repository.execute(user_id, user_name, email)                                                                     
+            say(response)                                                                                                                                 
+        except Exception as e:                                                                                                                      
+            say(f"エラーが発生しました: {e}")          
+
+    @app.command("/del_user")                                                                                      
+    def handle_del_user_command(ack, body, say):                                                                                               
+        ack()                                                                                                                                       
+        user_id = body["user_id"]                                                                                                      
+        try:                                                                                                               
+            # Firestoreから削除                                                                                             
+            command_del_user_repository = CommandDelUserResponce()                                              
+            response = command_del_user_repository.execute(user_id)                                       
+            say(response)                                                                                           
+        except Exception as e:                                                                                      
+            say(f"エラーが発生しました: {e}")
+    
     @app.command("/jira")
     def handle_jira_command(ack, say):
         ack()

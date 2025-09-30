@@ -89,3 +89,46 @@ class RequestJqlRepository:
 
         # 全ての条件を " AND " で連結して返す
         return " AND ".join(conditions)
+    
+
+    def format_jira_issue_for_slack(self, issue):
+        # 課題のURLを取得
+        issue_url = issue.permalink()
+
+        # 担当者がいるかどうかを確認
+        if issue.fields.assignee:
+            assignee_name = issue.fields.assignee.displayName
+        else:
+            assignee_name = "未割り当て"
+
+        # ステータス名を取得
+        status_name = issue.fields.status.name
+
+        # Block KitのJSON構造を構築
+        blocks = [
+            {
+                "type": "divider" # 区切り線
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    # 課題の要約を太字にし、課題キーにURLをリンクさせる
+                    "text": f" *<{issue_url}|{issue.key}>: {issue.fields.summary}*"
+                }
+            },
+            {
+                "type": "context", # 補足情報セクション
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*ステータス*: {status_name}"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*担当者*: {assignee_name}"
+                    }
+                ]
+            }
+        ]
+        return blocks

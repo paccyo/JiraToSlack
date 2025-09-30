@@ -1,7 +1,7 @@
 # commands/del_user/main.py
 from google.cloud import firestore
 
-class Command_Del_User_Responce:
+class CommandDelUserResponce:
     def __init__(self):
         self.db = firestore.Client()
 
