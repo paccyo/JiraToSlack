@@ -1,7 +1,7 @@
 
 import os
-from commands.jira.main import Command_Jira_Responce
-from commands.jira_get_tasks.main import Command_Jira_Get_Tasks_Responce
+from commands.jira.main import CommandJiraRepository
+from commands.jira_get_tasks.main import CommandJiraGetTasksRepository
 from commands.add_user.main import CommandAddUserResponce
 from commands.del_user.main import CommandDelUserResponce
 from commands.jira.main import CommandJiraRepository
