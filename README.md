@@ -13,20 +13,34 @@ Google Cloud Platform (GCP) 上で動作します。
   - [3. APIの有効化](#3-apiの有効化)
   - [4. Secret Manager の設定](#4-secret-manager-の設定)
   - [5. Firestore の設定](#5-firestore-の設定)
-  - [6. Pub/Sub の設定](#6-pubsub-の設定)
-  - [7. Cloud Function のデプロイ](#7-cloud-function-のデプロイ)
-  - [8. Cloud Scheduler の設定](#8-cloud-scheduler-の設定)
+- [アプリケーションのデプロイ](#アプリケーションのデプロイ)
+- [スケジューラ機能のセットアップ](#スケジューラ機能のセットアップ)
+  - [ステップ1: Pub/Sub トピックの作成](#ステップ1-pubsub-トピックの作成)
+  - [ステップ2: Eventarc トリガーの作成](#ステップ2-eventarc-トリガーの作成)
+  - [ステップ3: Cloud Scheduler の設定](#ステップ3-cloud-scheduler-の設定)
 - [環境変数](#環境変数)
-- [デプロイ](#デプロイ)
 
 ## アーキテクチャ概要
 
-- **Cloud Functions**: Slackからのイベント受信と、Pub/Subからのメッセージ受信を処理するメインアプリケーション。
-- **Slack Bolt**: Slackアプリのフレームワーク。
-- **Firestore**: ユーザー情報を保存するデータベース。
-- **Secret Manager**: APIキーやトークンなどの機密情報を安全に保管。
-- **Cloud Scheduler & Pub/Sub**: スケジューラ機能を実装。Cloud Schedulerが定期的にPub/Subトピックにメッセージを送信し、それをトリガーにCloud Functionが実行されます。
-- **Cloud Build**: デプロイを自動化。
+このアプリケーションは、主に単一の**Cloud Function (第2世代)** としてデプロイされます。Cloud Functions (第2世代) は内部的にCloud Run上で動作するため、スケーラビリティと柔軟性に優れています。
+
+主な処理の流れは以下の2通りです。
+
+1.  **Slackからの対話的リクエスト**:
+    -   ユーザーがSlackでスラッシュコマンド (`/jira_get_tasks`など) を実行します。
+    -   SlackがCloud FunctionのHTTPエンドポイントを直接呼び出します。
+    -   Cloud Function内の**Slack Bolt**フレームワークがリクエストを処理し、必要に応じてJira APIを叩き、結果をSlackに返信します。
+
+2.  **スケジュールされたタスク通知**:
+    -   **Cloud Scheduler**が設定されたスケジュール（例: 毎日午前9時）になると、ジョブを実行します。
+    -   ジョブは、特定のメッセージを**Pub/Sub**トピックに送信（Publish）します。
+    -   **Eventarc**がこのPub/Subへのメッセージ発行を検知し、トリガーとして設定されたCloud FunctionのHTTPエンドポイントを呼び出します。このとき、Pub/Subメッセージがリクエストボディに含まれます。
+    -   Cloud Functionはリクエストボディを解析し、スケジューラタスク（全ユーザーのJiraタスクを取得してDMで通知）を実行します。
+
+**その他の主要サービス:**
+- **Firestore**: ユーザー情報（Slack IDとJiraのメールアドレス）を保存するNoSQLデータベース。
+- **Secret Manager**: SlackやJiraのAPIキー、トークンなどの機密情報を安全に保管します。
+- **Cloud Build**: `gcloud functions deploy`コマンドを実行すると、裏側でCloud Buildがソースコードをコンテナイメージにビルドし、Cloud Runにデプロイします。
 
 ## 前提条件
 
@@ -42,14 +56,12 @@ Google Cloud Platform (GCP) 上で動作します。
     公式ドキュメントに従って、お使いのOSに`gcloud` CLIをインストールしてください。
     [gcloud CLI インストールガイド](https://cloud.google.com/sdk/docs/install)
 
-2.  **初期化**:
-    ターミナルで以下のコマンドを実行し、GCPアカウントへのログインとプロジェクトの選択を行います。
+2.  **初期化とログイン**:
     ```bash
     gcloud init
     ```
 
 3.  **プロジェクト設定**:
-    以降のコマンドで対象となるGCPプロジェクトIDを設定します。
     ```bash
     gcloud config set project YOUR_PROJECT_ID
     ```
@@ -77,67 +89,25 @@ gcloud services enable \
 
 ### 4. Secret Manager の設定
 
-プロジェクトで必要となるAPIキーやトークンをSecret Managerに保存します。
+[環境変数](#環境変数)セクションにリストされている各変数に対して、シークレットの作成と値の設定を行います。
 
-1.  **シークレットの作成と値の設定**:
-    [環境変数](#環境変数)セクションにリストされている各変数に対して、以下のコマンドを実行します。
+```bash
+# シークレットを作成 (例: SLACK_BOT_TOKEN)
+gcloud secrets create SLACK_BOT_TOKEN --replication-policy="automatic"
 
-    ```bash
-    # シークレットを作成
-    gcloud secrets create SECRET_NAME --replication-policy="automatic"
-
-    # シークレットに値を設定 (値はファイルからも読み込めます)
-    printf "YOUR_SECRET_VALUE" | gcloud secrets versions add SECRET_NAME --data-file=-
-    ```
-    `SECRET_NAME`と`YOUR_SECRET_VALUE`を実際の値に置き換えてください。
+# シークレットに値を設定
+printf "xoxb-YOUR-SLACK-BOT-TOKEN" | gcloud secrets versions add SLACK_BOT_TOKEN --data-file=-
+```
 
 ### 5. Firestore の設定
 
 1.  GCP ConsoleでFirestoreに移動します。
 2.  「ネイティブモード」を選択してデータベースを作成します。
 3.  ロケーションを選択します（例: `asia-northeast1`）。
-4.  `slack_users` という名前のコレクションが自動的に作成されますが、手動で作成する必要はありません。
 
-### 6. Pub/Sub の設定
+## アプリケーションのデプロイ
 
-スケジューラ用のPub/Subトピックを作成します。
-
-```bash
-gcloud pubsub topics create scheduler-topic
-```
-
-### 7. Cloud Function のデプロイ
-
-アプリケーションをCloud Functionとしてデプロイします。詳細は[デプロイ](#デプロイ)セクションを参照してください。
-
-### 8. Cloud Scheduler の設定
-
-毎日午前9時に定期実行するスケジューラを設定する例です。
-
-```bash
-gcloud scheduler jobs create pubsub daily-task-scheduler \
-  --schedule="0 9 * * *" \
-  --topic="scheduler-topic" \
-  --message-body='{"flag":"execute_special_task"}' \
-  --time-zone="Asia/Tokyo"
-```
-
-## 環境変数
-
-以下の環境変数をSecret Managerに設定する必要があります。
-
-| シークレット名 (SECRET_NAME) | 説明 |
-| -------------------------- | -------------------------------------------------- |
-| `SLACK_BOT_TOKEN`          | Slack BotのOAuthトークン (`xoxb-`で始まる)         |
-| `SLACK_SIGNING_SECRET`     | SlackアプリのSigning Secret                        |
-| `JIRA_DOMAIN`              | Jiraのドメイン (例: `your-domain.atlassian.net`)   |
-| `JIRA_EMAIL`               | Jiraに登録しているメールアドレス                   |
-| `JIRA_API_TOKEN`           | Jira APIトークン                                   |
-| `GEMINI_API_KEY`           | Google AI Studioで発行したGemini APIキー           |
-
-## デプロイ
-
-以下のコマンドを使用して、Cloud Functionをデプロイします。`YOUR_PROJECT_ID`とリージョンは適宜変更してください。
+以下のコマンドで、アプリケーション本体をCloud Functionとしてデプロイします。この時点では、Slackからのリクエストのみを受け付けます。
 
 ```bash
 gcloud functions deploy jira-slack-bot \
@@ -156,6 +126,65 @@ gcloud functions deploy jira-slack-bot \
   --set-secrets='GEMINI_API_KEY=GEMINI_API_KEY:latest'
 ```
 
-**注意**:
-- `--set-secrets` フラグでは、`環境変数名=Secret Managerの名前:バージョン` の形式で指定します。
-- このアプリケーションはPub/Subからも呼び出されるため、Cloud Function作成後にサービスアカウントにPub/Sub関連の権限を付与する必要がある場合があります。
+デプロイが完了すると、HTTPトリガーURLが発行されます。このURLをSlackアプリの管理画面 (Request URL) に設定してください。
+
+## スケジューラ機能のセットアップ
+
+次に、定期実行タスクのための連携を設定します。
+
+### ステップ1: Pub/Sub トピックの作成
+
+まず、Cloud Schedulerからのメッセージを受け取るための中継地点となるPub/Subトピックを作成します。
+
+```bash
+gcloud pubsub topics create scheduler-topic
+```
+
+### ステップ2: Eventarc トリガーの作成
+
+次に、上記で作成した`scheduler-topic`にメッセージが発行されたことを検知し、デプロイ済みのCloud Function (`jira-slack-bot`) を呼び出すためのEventarcトリガーを作成します。これがPub/SubとCloud Functionを繋ぐ「接着剤」の役割を果たします。
+
+```bash
+# 環境変数を設定
+export TRIGGER_NAME=scheduler-trigger
+export LOCATION=asia-northeast1 # デプロイしたリージョン
+export FUNCTION_NAME=jira-slack-bot
+export TOPIC_NAME=scheduler-topic
+
+# Eventarcトリガーを作成
+gcloud eventarc triggers create $TRIGGER_NAME \
+  --location=$LOCATION \
+  --destination-run-service=$FUNCTION_NAME \
+  --destination-run-region=$LOCATION \
+  --event-filters="type=google.cloud.pubsub.topic.v1.messagePublished" \
+  --event-filters="topic=$TOPIC_NAME"
+```
+
+**重要**: 初回作成時に、Eventarcが使用するサービスアカウントに必要な権限を付与するよう求められる場合があります。指示に従って権限を付与してください。
+
+### ステップ3: Cloud Scheduler の設定
+
+最後に、指定した時間にPub/Subトピックへメッセージを送るCloud Schedulerジョブを作成します。以下の例では、毎日午前9時にタスクを実行します。
+
+```bash
+gcloud scheduler jobs create pubsub daily-task-scheduler \
+  --schedule="0 9 * * *" \
+  --topic="scheduler-topic" \
+  --message-body='{"message": "flag","data": "nothing","flag": "execute_special_task"}' \
+  --time-zone="Asia/Tokyo"
+```
+
+これで、毎日午前9時に`daily-task-scheduler`が`scheduler-topic`にメッセージを送信し、それをEventarcが検知して`jira-slack-bot`関数が実行される、という一連の流れが完成しました。
+
+## 環境変数
+
+以下の環境変数をSecret Managerに設定する必要があります。
+
+| シークレット名 (SECRET_NAME) | 説明 |
+| -------------------------- | -------------------------------------------------- |
+| `SLACK_BOT_TOKEN`          | Slack BotのOAuthトークン (`xoxb-`で始まる)         |
+| `SLACK_SIGNING_SECRET`     | SlackアプリのSigning Secret                        |
+| `JIRA_DOMAIN`              | Jiraのドメイン (例: `your-domain.atlassian.net`)   |
+| `JIRA_EMAIL`               | Jiraに登録しているメールアドレス                   |
+| `JIRA_API_TOKEN`           | Jira APIトークン                                   |
+| `GEMINI_API_KEY`           | Google AI Studioで発行したGemini APIキー           |
