@@ -104,6 +104,12 @@ class RequestJqlRepository:
         # ステータス名を取得
         status_name = issue.fields.status.name
 
+        # 優先度名を取得
+        priority_name = issue.fields.priority.name if issue.fields.priority else "なし"
+
+        # 期日を取得
+        due_date = issue.fields.duedate if issue.fields.duedate else "なし"
+
         # Block KitのJSON構造を構築
         blocks = [
             {
@@ -127,6 +133,14 @@ class RequestJqlRepository:
                     {
                         "type": "mrkdwn",
                         "text": f"*担当者*: {assignee_name}"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*優先度*: {priority_name}"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*期日*: {due_date}"
                     }
                 ]
             }

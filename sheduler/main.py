@@ -1,5 +1,6 @@
 # sheduler/main.py
 import sys
+from datetime import datetime, date
 
 from util.request_jql import RequestJqlRepository
 
@@ -40,21 +41,56 @@ class SchedulerTaskHandler:
                     
                     # JQLを実行してJiraからタスクを取得
                     jira_results = request_jql_repository.execute(jql_query)
-                    
-                    blocks = [
-                        {
-                            "type": "header",
-                            "text": {
-                                "type": "plain_text",
-                                "text": "今日のあなたのタスクはこちらです！"
-                            }
-                        }
-                    ]
-                    
+                    print(f"Jiraから {len(jira_results) if jira_results else 0} 件のタスクを取得しました。") # デバッグ用ログ
+
+                    blocks = []
+                    found_any_tasks = False
+
                     if jira_results:
-                        for issue in jira_results:
-                            blocks.extend(request_jql_repository.format_jira_issue_for_slack(issue))
-                    else:
+                        today = date.today().isoformat()
+
+                        # カテゴリ1: 今日が期限のタスク
+                        tasks_due_today = [issue for issue in jira_results if issue.fields.duedate and issue.fields.duedate == today]
+                        if tasks_due_today:
+                            found_any_tasks = True
+                            blocks.append({"type": "header", "text": {"type": "plain_text", "text": "今日が期限のタスク"}})
+                            for issue in tasks_due_today:
+                                blocks.extend(request_jql_repository.format_jira_issue_for_slack(issue))
+
+                        # 残りのタスク（今日が期限のものを除く）
+                        remaining_tasks = [issue for issue in jira_results if not (issue.fields.duedate and issue.fields.duedate == today)]
+
+                        # カテゴリ2: 優先度の高いタスク
+                        def priority_sort_key(issue):
+                            if issue.fields.priority:
+                                return int(issue.fields.priority.id)
+                            return sys.maxsize # 優先度がないものは最後に
+                        
+                        sorted_by_priority = sorted(remaining_tasks, key=priority_sort_key)
+                        high_priority_tasks = [t for t in sorted_by_priority if t.fields.priority][:3]
+
+                        if high_priority_tasks:
+                            found_any_tasks = True
+                            blocks.append({"type": "header", "text": {"type": "plain_text", "text": "優先度の高いタスク"}})
+                            for issue in high_priority_tasks:
+                                blocks.extend(request_jql_repository.format_jira_issue_for_slack(issue))
+
+                        # カテゴリ3: 期日が近いタスク
+                        tasks_with_duedate = [issue for issue in remaining_tasks if issue.fields.duedate]
+                        def duedate_sort_key(issue):
+                            return datetime.strptime(issue.fields.duedate, "%Y-%m-%d").date()
+                        
+                        upcoming_tasks = sorted(tasks_with_duedate, key=duedate_sort_key)[:3]
+                        if upcoming_tasks:
+                            # 優先度タスクと重複している可能性のあるものを除く
+                            upcoming_tasks_filtered = [task for task in upcoming_tasks if task not in high_priority_tasks]
+                            if upcoming_tasks_filtered:
+                                found_any_tasks = True
+                                blocks.append({"type": "header", "text": {"type": "plain_text", "text": "期日が近いタスク"}})
+                                for issue in upcoming_tasks_filtered:
+                                    blocks.extend(request_jql_repository.format_jira_issue_for_slack(issue))
+
+                    if not found_any_tasks:
                         blocks.append({
                             "type": "section",
                             "text": {

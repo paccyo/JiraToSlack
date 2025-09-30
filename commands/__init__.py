@@ -8,21 +8,28 @@ def register_commands(app):
     """
     Registers all slash commands with the provided app instance.
     """
-    @app.command("/add_user")                                                                                                                                                
-    def handle_add_user_command(ack, body, say, client):                                                                                                                   
-        ack()                                                                                                                                                                 
-        user_id = body["user_id"]                                                                                                                                              
-        user_name = body["user_name"]                                                                                                                                          
+    @app.command("/add_user")
+    def handle_add_user_command(ack, body, say, client):
+        ack()
+        user_id = body["user_id"]
+        user_name = body["user_name"]
+        text = body.get("text", "").strip()
 
-        try:                                                                                                                                                                    
-            # ユーザーのメールアドレスを取得                                                                                                                                   
-            user_info = client.users_info(user=user_id)                                                                                                      
-            email = user_info["user"]["profile"]["email"]                                                                                                
-            # Firestoreに保存                                                                                                                                     
-            command_add_user_repository = CommandAddUserResponce()                                                                                          
-            response = command_add_user_repository.execute(user_id, user_name, email)                                                                     
-            say(response)                                                                                                                                 
-        except Exception as e:                                                                                                                      
+        try:
+            email_to_register = ""
+            if text:
+                # テキストが提供されていれば、それをメールアドレスとして使用
+                email_to_register = text
+            else:
+                # テキストがなければ、Slackプロフィールのメールアドレスを取得
+                user_info = client.users_info(user=user_id)
+                email_to_register = user_info["user"]["profile"]["email"]
+
+            # Firestoreに保存
+            command_add_user_repository = CommandAddUserResponce()
+            response = command_add_user_repository.execute(user_id, user_name, email_to_register)
+            say(response)
+        except Exception as e:
             say(f"エラーが発生しました: {e}")          
 
     @app.command("/del_user")                                                                                      

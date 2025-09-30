@@ -2,7 +2,7 @@
 # from request_jql import RequestJqlRepository
 
 from commands.jira_get_tasks.prompts import get_system_prompt_generate_jql, JQLQuerySchema
-from utill.request_jql import RequestJqlRepository
+from util.request_jql import RequestJqlRepository
 
 import os
 import json
