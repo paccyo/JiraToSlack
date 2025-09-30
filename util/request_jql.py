@@ -1,5 +1,6 @@
 import os
 from jira import JIRA
+from datetime import datetime
 
 class RequestJqlRepository:
     def __init__(self):
@@ -123,6 +124,13 @@ class RequestJqlRepository:
         # 期日を取得
         due_date = issue.fields.duedate if issue.fields.duedate else "なし"
 
+        # 完了日を取得・フォーマット
+        if issue.fields.resolutiondate:
+            resolution_date_obj = datetime.strptime(issue.fields.resolutiondate, '%Y-%m-%dT%H:%M:%S.%f%z')
+            resolution_date = resolution_date_obj.strftime('%Y-%m-%d %H:%M')
+        else:
+            resolution_date = "未完了"
+
         # Block KitのJSON構造を構築
         blocks = [
             {
@@ -154,6 +162,10 @@ class RequestJqlRepository:
                     {
                         "type": "mrkdwn",
                         "text": f"*期日*: {due_date}"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*完了日*: {resolution_date}"
                     }
                 ]
             }
