@@ -14,6 +14,15 @@ except Exception:
 from textwrap import dedent
 
 
+# Local configuration defaults (managed within code instead of environment variables)
+BURNDOWN_UNIT = "issues"
+GEMINI_DEBUG = True
+GEMINI_TIMEOUT = 40.0
+GEMINI_RETRIES = 2
+AI_OVERLAY_IN_IMAGE = True
+AI_OVERLAY_MAX_LINES = 18
+
+
 def maybe_load_dotenv() -> None:
     try:
         from dotenv import load_dotenv  # type: ignore
@@ -397,22 +406,15 @@ def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Opt
     if not api_key:
         return None
     if not genai:
-        if os.getenv("GEMINI_DEBUG", "").lower() in ("1", "true", "yes"):
+        if GEMINI_DEBUG:
             print("[Gemini] google-generativeai not installed or failed to import")
         return None
     try:
         # Configuration
         model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
-        fallback_model = os.getenv("GEMINI_MODEL_FALLBACK", "gemini-1.5-flash")
-        try:
-            timeout_s = float(os.getenv("GEMINI_TIMEOUT", "25"))
-    # 日付文字列をYYYY/MM/DD形式に変換。複数フォーマット対応。
-        except Exception:
-            timeout_s = 25.0
-        try:
-            retries = int(os.getenv("GEMINI_RETRIES", "2"))
-        except Exception:
-            retries = 2
+        
+        timeout_s = float(GEMINI_TIMEOUT)
+        retries = int(GEMINI_RETRIES)
         temp = float(os.getenv("GEMINI_TEMPERATURE", "0.1"))
         top_p = float(os.getenv("GEMINI_TOP_P", "0.9"))
 
@@ -439,6 +441,8 @@ def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Opt
                         return text
                 except Exception as e:
                     last_err = e
+                    if GEMINI_DEBUG:
+                        print(f"[Gemini] attempt {attempt+1}/{retries+1} failed: {e}")
                 # backoff
                 try:
                     import time as _t
@@ -446,7 +450,7 @@ def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Opt
                 except Exception:
                     pass
             # if all attempts failed
-            if os.getenv("GEMINI_DEBUG", "").lower() in ("1", "true", "yes") and last_err:
+            if GEMINI_DEBUG and last_err:
                 print(f"[Gemini] error on model {model_id}: {last_err}")
             return None
         # --- プロンプト（出力形式を整形） ---
@@ -541,13 +545,12 @@ def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Opt
         )
         # Try primary then fallback model
         text = _call(model_name)
-        if not text and fallback_model and fallback_model != model_name:
-            text = _call(fallback_model)
-        if not text and os.getenv("GEMINI_DEBUG", "").lower() in ("1", "true", "yes"):
+
+        if not text and GEMINI_DEBUG:
             print("[Gemini] empty response from both primary and fallback models")
         return text
     except Exception as e:
-        if os.getenv("GEMINI_DEBUG", "").lower() in ("1", "true", "yes"):
+        if GEMINI_DEBUG:
             print(f"[Gemini] error: {e}")
         return None
 
@@ -570,11 +573,8 @@ def maybe_gemini_justify_evidences(
             return {}
 
         model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
-        fallback_model = os.getenv("GEMINI_MODEL_FALLBACK", "gemini-1.5-flash-8b")
-        try:
-            timeout_s = float(os.getenv("GEMINI_TIMEOUT", "25"))
-        except Exception:
-            timeout_s = 25.0
+
+        timeout_s = float(GEMINI_TIMEOUT)
         temp = float(os.getenv("GEMINI_TEMPERATURE", "0.2"))
         top_p = float(os.getenv("GEMINI_TOP_P", "0.9"))
         try:
@@ -630,9 +630,9 @@ def maybe_gemini_justify_evidences(
             except Exception:
                 return None
 
-        text = _call(model_name) or (fallback_model and _call(fallback_model)) or None
+        text = _call(model_name)  or None
         if not text:
-            if os.getenv("GEMINI_DEBUG", "").lower() in ("1", "true", "yes"):
+            if GEMINI_DEBUG:
                 print("- AI要約: evidence reasons 空応答（元の理由を使用）")
             return {}
 
@@ -667,11 +667,11 @@ def maybe_gemini_justify_evidences(
                 else:
                     clipped[k] = v
 
-        if os.getenv("GEMINI_DEBUG", "").lower() in ("1", "true", "yes") and clipped:
+        if GEMINI_DEBUG and clipped:
             print(f"- AI要約: evidence reasons {len(clipped)}件 生成")
         return clipped
     except Exception as e:
-        if os.getenv("GEMINI_DEBUG", "").lower() in ("1", "true", "yes"):
+        if GEMINI_DEBUG:
             print(f"[Gemini] evidence reasons error: {e}")
         return {}
 
@@ -1812,7 +1812,7 @@ def draw_png(
     _gemini_disabled = os.getenv("GEMINI_DISABLE", "").lower() in ("1", "true", "yes")
     ai = None
     if gemini_key and not _gemini_disabled and genai is not None:
-        if os.getenv("GEMINI_DEBUG", "").lower() in ("1", "true", "yes") and _log_on:
+        if GEMINI_DEBUG and _log_on:
             masked = f"{gemini_key[:4]}...{gemini_key[-4:]}" if len(gemini_key) >= 8 else "(set)"
             if raw_key and raw_key != gemini_key:
                 print("- AI要約: APIキーを正規化しました（非ASCIIや余分な記号を除去）")
@@ -1853,7 +1853,7 @@ def draw_png(
 
     # AI summary overlay panel (wrapped text in image) — runs after caption to avoid NameError
     try:
-        overlay_enabled = os.getenv("AI_OVERLAY_IN_IMAGE", "1").lower() in ("1", "true", "yes")
+        overlay_enabled = AI_OVERLAY_IN_IMAGE
         ai_text = (extras or {}).get("ai_full_text") if extras else None
         if overlay_enabled and isinstance(ai_text, str) and ai_text.strip():
             # Keep the full AI summary content without truncation
@@ -1916,7 +1916,7 @@ def draw_png(
                 line_h = max(14, text_wh("A", content_font)[1])
                 max_lines_by_height = max(1, (panel_h - (content_y - panel_y0) - 8) // line_h)
                 try:
-                    max_lines_cap = int(os.getenv("AI_OVERLAY_MAX_LINES", "18"))
+                    max_lines_cap = int(AI_OVERLAY_MAX_LINES)
                 except Exception:
                     max_lines_cap = 18
                 max_lines = max(1, min(max_lines_by_height, max_lines_cap))
@@ -1994,7 +1994,7 @@ def main() -> int:
     extras: Dict[str, Any] = {}
     try:
         # A. Burndown
-        bd_args = ["--unit", os.getenv("BURNDOWN_UNIT", "issues")]
+        bd_args = ["--unit", BURNDOWN_UNIT]
         extras["burndown"] = get_json_from_script_args(str(base_dir / "queries" / "jira_q_burndown.py"), bd_args)
     except Exception:
         extras["burndown"] = None

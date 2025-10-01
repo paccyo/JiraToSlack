@@ -1,4 +1,3 @@
-import os
 import sys
 import json
 import argparse
@@ -15,6 +14,7 @@ except ModuleNotFoundError:
     from lib.jira_client import JiraClient  # type: ignore
 
 JST = timezone(timedelta(hours=9))
+DEFAULT_BURNDOWN_UNIT = "issues"
 
 def parse_iso(date_str: Optional[str]) -> Optional[datetime]:
     if not date_str:
@@ -34,7 +34,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Jira burndown JSON for sprint")
     parser.add_argument("--sprint", type=int, help="Sprint ID (defaults to active)"
                         )
-    parser.add_argument("--unit", choices=["points", "issues"], default=os.getenv("BURNDOWN_UNIT", "points"))
+    parser.add_argument("--unit", choices=["points", "issues"], default=DEFAULT_BURNDOWN_UNIT)
     args = parser.parse_args()
 
     jc = JiraClient()
