@@ -39,6 +39,8 @@ python .\prototype\local_cli\jira_count_issues.py
 プロジェクト ABC のタスク総数: 123
 ```
 
+> ℹ️ 2024年Q4以降、Jira検索APIは `/rest/api/3/search/jql` のみ利用可能です。本レポジトリのCLI群は `pageToken` によるページネーションで全件取得するよう更新済みのため、旧 `/search` エンドポイントは使用しないでください。
+
 ### 3) 設定エクスポート
 
 ```powershell

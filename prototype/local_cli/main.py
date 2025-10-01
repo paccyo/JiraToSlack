@@ -7,6 +7,11 @@ from typing import Any, Dict, List, Optional, Tuple
 from PIL import Image, ImageDraw, ImageFont
 import requests
 from requests.auth import HTTPBasicAuth
+# Ensure the repository root is on sys.path when executed as a script
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from prototype.local_cli.lib.board_selector import resolve_board_with_preferences
 try:
     import google.generativeai as genai  # type: ignore
     from google.generativeai import types
@@ -234,66 +239,99 @@ def api_get(url: str, auth: HTTPBasicAuth, params: Optional[Dict[str, Any]] = No
 
     # 引数付きPythonスクリプトをサブプロセスで実行し、JSON出力を取得。
     # env_extraで追加環境変数を渡せる。失敗時は例外。
+def _format_search_error(data: Optional[Dict[str, Any]], err: str) -> str:
+    if isinstance(data, dict):
+        messages = data.get("errorMessages") or data.get("errors")
+        if isinstance(messages, list) and messages:
+            return " ".join(str(m) for m in messages if m)
+        if isinstance(messages, dict) and messages:
+            try:
+                return json.dumps(messages, ensure_ascii=False)
+            except Exception:
+                return str(messages)
+    return err
+
+
+def search_jql_page(
+    JIRA_DOMAIN: str,
+    auth: HTTPBasicAuth,
+    jql: str,
+    fields: Optional[List[str]],
+    max_results: int,
+    page_token: Optional[str] = None,
+) -> Tuple[int, Optional[Dict[str, Any]], str]:
+    params: Dict[str, Any] = {
+        "jql": jql,
+        "maxResults": max(1, min(max_results, 5000)),
+    }
+    if fields:
+        params["fields"] = ",".join(fields)
+    if page_token:
+        params["pageToken"] = page_token
+    code, data, err = api_get(f"{JIRA_DOMAIN}/rest/api/3/search/jql", auth, params=params)
+    if code != 200 or not isinstance(data, dict):
+        return code, None, _format_search_error(data, err)
+    return code, data, ""
+
+
+def collect_issue_count(
+    JIRA_DOMAIN: str,
+    auth: HTTPBasicAuth,
+    jql: str,
+    batch: int = 500,
+) -> Tuple[int, Optional[int], str]:
+    total = 0
+    page_token: Optional[str] = None
+    seen_tokens: set[str] = set()
+    while True:
+        code, data, err = search_jql_page(JIRA_DOMAIN, auth, jql, ["id"], batch, page_token)
+        if code != 200 or not data:
+            return code, None, err
+        issues = data.get("issues") or []
+        total += len(issues)
+        page_token = data.get("nextPageToken")
+        is_last = data.get("isLast", True)
+        if not issues or not page_token or page_token in seen_tokens or is_last:
+            break
+        seen_tokens.add(page_token)
+    return 200, total, ""
+
+
 def search_issue_keys(JIRA_DOMAIN: str, auth: HTTPBasicAuth, jql: str, limit: int = 10) -> List[str]:
-    try:
-        url = f"{JIRA_DOMAIN}/rest/api/3/search"
-        params = {"jql": jql, "fields": "key", "maxResults": limit}
-        code, data, _ = api_get(url, auth, params=params)
-        if code == 200 and data:
-            return [str(it.get("key")) for it in (data.get("issues") or [])]
-    except Exception:
-        pass
-    return []
+    keys: List[str] = []
+    page_token: Optional[str] = None
+    seen_tokens: set[str] = set()
+    while len(keys) < limit:
+        remaining = max(1, limit - len(keys))
+        code, data, _ = search_jql_page(JIRA_DOMAIN, auth, jql, ["key"], remaining, page_token)
+        if code != 200 or not data:
+            break
+        issues = data.get("issues") or []
+        for it in issues:
+            if "key" in it:
+                keys.append(str(it.get("key")))
+                if len(keys) >= limit:
+                    break
+        page_token = data.get("nextPageToken")
+        is_last = data.get("isLast", True)
+        if not page_token or page_token in seen_tokens or is_last or not issues:
+            break
+        seen_tokens.add(page_token)
+    return keys
 
 
 def resolve_board(JIRA_DOMAIN: str, auth: HTTPBasicAuth) -> Tuple[int, Optional[Dict[str, Any]], str]:
+    domain = (JIRA_DOMAIN or "").rstrip("/")
+    if not domain:
+        return 400, None, "JIRA_DOMAIN が未設定です"
+
     board_id = os.getenv("JIRA_BOARD_ID")
     project_key = os.getenv("JIRA_PROJECT_KEY")
 
-    if board_id and board_id.isdigit():
-        return api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/board/{board_id}", auth)
+    def fetch(url: str, params: Optional[Dict[str, Any]] = None) -> Tuple[int, Optional[Dict[str, Any]], str]:
+        return api_get(url, auth, params=params)
 
-    if board_id and not board_id.isdigit():
-        params: Dict[str, Any] = {"maxResults": 50}
-        if project_key:
-    # Jira REST API GETリクエスト。認証・パラメータ付きで実行し、JSONレスポンスを返す。
-    # ステータスコード・データ・エラー文字列を返す。
-            params["projectKeyOrId"] = project_key
-        code, data, err = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/board", auth, params=params)
-        if code != 200 or not data:
-            return code, None, f"ボード一覧取得に失敗: {err}"
-        items = data.get("values", [])
-        exact = [x for x in items if str(x.get("name", "")).lower() == board_id.lower()]
-        if exact:
-            return 200, exact[0], ""
-        partial = [x for x in items if board_id.lower() in str(x.get("name", "")).lower()]
-        if partial:
-            return 200, partial[0], ""
-        code2, data2, err2 = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/board", auth, params={"maxResults": 50})
-        if code2 == 200 and data2:
-            items2 = data2.get("values", [])
-            exact = [x for x in items2 if str(x.get("name", "")).lower() == board_id.lower()]
-            if exact:
-                return 200, exact[0], ""
-            partial = [x for x in items2 if board_id.lower() in str(x.get("name", "")).lower()]
-            if partial:
-                return 200, partial[0], ""
-    # JQLで課題キー一覧を取得。最大件数limit指定可。
-        return 404, None, f"ボード名 '{board_id}' は見つかりませんでした"
-
-    params: Dict[str, Any] = {"maxResults": 50}
-    if project_key:
-        params["projectKeyOrId"] = project_key
-    code, data, err = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/board", auth, params=params)
-    if code == 200 and data and data.get("values"):
-        return 200, data.get("values")[0], ""
-    if code != 200:
-        return code, None, f"ボード一覧取得に失敗: {err}"
-    code2, data2, err2 = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/board", auth, params={"maxResults": 50})
-    # Jiraボード情報を取得。ID/名前/プロジェクトキーで検索し、最適なボードを返す。
-    if code2 == 200 and data2 and data2.get("values"):
-        return 200, data2.get("values")[0], ""
-    return 404, None, "ボードが見つかりませんでした"
+    return resolve_board_with_preferences(domain, fetch, project_key, board_id)
 
 
 def try_infer_project_key_from_board(JIRA_DOMAIN: str, auth: HTTPBasicAuth, board: Dict[str, Any]) -> Optional[str]:
@@ -357,41 +395,11 @@ def resolve_active_sprint(JIRA_DOMAIN: str, auth: HTTPBasicAuth, board_id: int) 
 
     # プロジェクトに紐づくボード数を取得。
 def approximate_count(JIRA_DOMAIN: str, auth: HTTPBasicAuth, jql: str) -> Tuple[int, Optional[int], str]:
-    url = f"{JIRA_DOMAIN}/rest/api/3/search/approximate/count"
-    code, data, err = api_get(url, auth, params={"jql": jql})
-    if code == 200 and isinstance(data, dict):
-        try:
-            cnt = int((data.get("approximate") or {}).get("total") or 0)
-            return 200, cnt, ""
-        except Exception:
-            pass
-    # ボードIDからアクティブスプリント数を取得。
-    return code, None, err
+    return collect_issue_count(JIRA_DOMAIN, auth, jql, batch=500)
 
 
 def search_count(JIRA_DOMAIN: str, auth: HTTPBasicAuth, jql: str) -> Tuple[int, Optional[int], str]:
-    """Fallback using Search API to retrieve accurate total without fetching issues.
-    Uses maxResults=0 to avoid payload; relies on 'total' field in response.
-    """
-    try:
-        resp = requests.get(
-            f"{JIRA_DOMAIN}/rest/api/3/search",
-            auth=auth,
-    # ボードIDからアクティブスプリント情報を取得。
-            headers={"Accept": "application/json"},
-            params={"jql": jql, "startAt": 0, "maxResults": 0, "fields": "none"},
-            timeout=30,
-        )
-    except requests.RequestException as e:
-        return 0, None, f"HTTPリクエストエラー: {e}"
-    if resp.status_code != 200:
-        return resp.status_code, None, resp.text
-    try:
-        data = resp.json()
-        total = int(data.get("total", 0))
-        return 200, total, ""
-    except Exception as e:
-        return 200, None, f"JSON解析失敗: {e}"
+    return collect_issue_count(JIRA_DOMAIN, auth, jql, batch=500)
 
 
     # JQLで近似件数を取得（高速）。
@@ -2237,10 +2245,15 @@ def main() -> int:
         # fetch current status for these keys
         if auth and JIRA_DOMAIN and ev_list:
             keys_csv = ",".join([str(e["key"]) for e in ev_list])
-            url = f"{JIRA_DOMAIN}/rest/api/3/search"
             fields = "summary,status,assignee,priority,duedate"
-            params = {"jql": f"key in ({keys_csv})", "fields": fields, "maxResults": topn}
-            code_s, data_s, _ = api_get(url, auth, params=params)
+            fields_list = [f.strip() for f in fields.split(",")]
+            code_s, data_s, _ = search_jql_page(
+                JIRA_DOMAIN,
+                auth,
+                f"key in ({keys_csv})",
+                fields_list,
+                max_results=max(1, topn),
+            )
             detail_map: Dict[str, Dict[str, Any]] = {}
             if code_s == 200 and data_s:
                 for iss in (data_s.get("issues") or []):

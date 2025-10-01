@@ -39,6 +39,40 @@ def api_get(url: str, auth: HTTPBasicAuth, params: Optional[Dict[str, Any]] = No
     return r.status_code, None, r.text
 
 
+def _format_search_error(data: Optional[Dict[str, Any]], err: str) -> str:
+    if isinstance(data, dict):
+        messages = data.get("errorMessages") or data.get("errors")
+        if isinstance(messages, list) and messages:
+            return " ".join(str(m) for m in messages if m)
+        if isinstance(messages, dict) and messages:
+            try:
+                return json.dumps(messages, ensure_ascii=False)
+            except Exception:
+                return str(messages)
+    return err
+
+
+def count_jql(domain: str, auth: HTTPBasicAuth, jql: str, batch: int = 500) -> tuple[int, Optional[int], str]:
+    total = 0
+    page_token: Optional[str] = None
+    seen_tokens: set[str] = set()
+    while True:
+        params: Dict[str, Any] = {"jql": jql, "maxResults": max(1, min(batch, 5000)), "fields": "id"}
+        if page_token:
+            params["pageToken"] = page_token
+        code, data, err = api_get(f"{domain}/rest/api/3/search/jql", auth, params)
+        if code != 200 or not isinstance(data, dict):
+            return code, None, _format_search_error(data, err)
+        issues = data.get("issues") or []
+        total += len(issues)
+        page_token = data.get("nextPageToken")
+        is_last = data.get("isLast", True)
+        if not issues or not page_token or page_token in seen_tokens or is_last:
+            break
+        seen_tokens.add(page_token)
+    return 200, total, ""
+
+
 def required_env(key: str) -> str:
     val = os.getenv(key)
     if not val:
@@ -98,25 +132,12 @@ def main() -> int:
         print("JQL が未指定です。--jql を与えるか、--scope (sprint|project) で自動生成してください。", file=sys.stderr)
         return 2
 
-    url = f"{domain}/rest/api/3/search"
-    try:
-        r = requests.get(url, params={"jql": jql, "maxResults": 0}, auth=auth, headers={"Accept": "application/json"}, timeout=30)
-    except requests.RequestException as e:
-        print(f"HTTPリクエストエラー: {e}", file=sys.stderr)
+    code, total, err = count_jql(domain, auth, jql, batch=500)
+    if code != 200 or total is None:
+        print(f"Jira検索失敗: {err or code}", file=sys.stderr)
         return 1
 
-    if r.status_code != 200:
-        print(f"Jira検索失敗: {r.status_code} {r.text}", file=sys.stderr)
-        return 1
-
-    try:
-        data: Dict[str, Any] = r.json()
-    except Exception:
-        print("JSON解析失敗", file=sys.stderr)
-        return 1
-
-    total = int(data.get("total", 0))
-    print(json.dumps({"total": total, "jql": jql}, ensure_ascii=False))
+    print(json.dumps({"total": int(total), "jql": jql}, ensure_ascii=False))
     return 0
 
 

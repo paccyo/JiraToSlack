@@ -9,6 +9,8 @@
 - main.pyが単体で正常にダッシュボード画像・レポートを生成できること
 - Botがファイルアップロード権限を持つこと（Slack管理画面で設定）
 - 生成物（画像/Markdown/JSON）の保存先・一時ファイル管理
+- Jira APIが `/rest/api/3/search/jql` で正常応答すること（旧 `/search` は410 Gone）
+- `pytest -q` がグリーンになること（回帰テスト）
 
 ---
 
@@ -26,8 +28,9 @@
 
 3. main.pyのダッシュボード生成
 
-   - `python -X utf8 prototype/local_cli/main.py` で `sprint_overview.png`・`sprint_overview_report.md` などが正常生成されることを確認済み。
-   - 画像・Markdown・JSON出力は正常。
+    - `python -X utf8 prototype/local_cli/main.py` で `sprint_overview.png`・`sprint_overview_report.md` などが正常生成されることを確認済み。
+    - 画像・Markdown・JSON出力は正常。
+    - 課題検索は `/rest/api/3/search/jql` + `nextPageToken` ページネーションで全件取得する実装に更新済み。
 
 4. Botのファイルアップロード権限
 
@@ -128,6 +131,7 @@ if __name__ == "__main__":
 - 複数チャンネル対応やDM対応
 - 生成物の保存先をS3等に変更も可能
 - Botの権限（files:write, chat:write, commands等）を事前に確認
+- Jira APIの仕様変更時は `prototype/local_cli/lib/jira_client.py` の共通ヘルパーを更新し、`pytest -q` と手動実行でリグレッションを確認
 
 ---
 

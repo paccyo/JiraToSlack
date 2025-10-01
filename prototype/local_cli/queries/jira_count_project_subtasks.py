@@ -23,12 +23,9 @@ def main() -> int:
 
     # 補助: subTaskIssueTypes() が使えない環境向けに、サブタスク種別名での集計を試す
     def count_by_search(jql: str) -> tuple[int, int | None, str]:
-        code_s, data_s, err_s = jc.api_get(f"{jc.domain}/rest/api/3/search", params={"jql": jql, "maxResults": 0})
-        if code_s == 200 and isinstance(data_s, dict):
-            try:
-                return 200, int(data_s.get("total", 0)), ""
-            except Exception:
-                return 200, None, "totalの解析に失敗"
+        code_s, total_s, err_s = jc.count_jql(jql)
+        if code_s == 200 and total_s is not None:
+            return 200, int(total_s), ""
         return code_s, None, err_s
 
     def try_fallback_by_names() -> tuple[int | None, int | None, int | None, str]:

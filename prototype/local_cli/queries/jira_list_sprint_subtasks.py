@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 from requests.auth import HTTPBasicAuth
 
+from prototype.local_cli.lib.board_selector import resolve_board_with_preferences
+
 
 def load_env(key: str) -> str:
     value = os.getenv(key)
@@ -81,6 +83,19 @@ def api_post(
         return resp.status_code, None, resp.text
 
 
+def _format_search_error(data: Optional[Dict[str, Any]], err: str) -> str:
+    if isinstance(data, dict):
+        messages = data.get("errorMessages") or data.get("errors")
+        if isinstance(messages, list) and messages:
+            return " ".join(str(m) for m in messages if m)
+        if isinstance(messages, dict) and messages:
+            try:
+                return json.dumps(messages, ensure_ascii=False)
+            except Exception:
+                return str(messages)
+    return err
+
+
 def resolve_story_points_field(
     JIRA_DOMAIN: str, auth: HTTPBasicAuth
 ) -> Optional[str]:
@@ -141,63 +156,17 @@ def resolve_story_points_field(
 
 
 def resolve_board(JIRA_DOMAIN: str, auth: HTTPBasicAuth) -> Tuple[int, Optional[Dict[str, Any]], str]:
+    domain = (JIRA_DOMAIN or "").rstrip("/")
+    if not domain:
+        return 400, None, "JIRA_DOMAIN が未設定です"
+
     board_id = os.getenv("JIRA_BOARD_ID")
     project_key = os.getenv("JIRA_PROJECT_KEY")
 
-    if board_id and board_id.isdigit():
-        code, data, err = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/board/{board_id}", auth)
-        if code == 200 and data:
-            return 200, data, ""
-        return code, None, f"ボードID {board_id} の取得に失敗: {err}"
+    def fetch(url: str, params: Optional[Dict[str, Any]] = None) -> Tuple[int, Optional[Dict[str, Any]], str]:
+        return api_get(url, auth, params=params)
 
-    if board_id and not board_id.isdigit():
-        params = {"maxResults": 50}
-        if project_key:
-            params["projectKeyOrId"] = project_key
-        code_b, data_b, err_b = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/board", auth, params=params)
-        items: List[Dict[str, Any]] = []
-        if code_b == 200 and data_b:
-            items.extend(data_b.get("values", []))
-        else:
-            return code_b, None, f"ボード一覧取得に失敗: {err_b}"
-
-        exact = [x for x in items if str(x.get("name", "")).lower() == board_id.lower()]
-        if exact:
-            return 200, exact[0], ""
-        partial = [x for x in items if board_id.lower() in str(x.get("name", "")).lower()]
-        if partial:
-            return 200, partial[0], ""
-
-        code_b2, data_b2, err_b2 = api_get(
-            f"{JIRA_DOMAIN}/rest/agile/1.0/board", auth, params={"maxResults": 50}
-        )
-        if code_b2 == 200 and data_b2:
-            items2 = data_b2.get("values", [])
-            exact = [x for x in items2 if str(x.get("name", "")).lower() == board_id.lower()]
-            if exact:
-                return 200, exact[0], ""
-            partial = [x for x in items2 if board_id.lower() in str(x.get("name", "")).lower()]
-            if partial:
-                return 200, partial[0], ""
-        else:
-            return code_b2, None, f"ボード一覧取得に失敗: {err_b2}"
-        return 404, None, f"ボード名 '{board_id}' は見つかりませんでした"
-
-    params = {"maxResults": 50}
-    if project_key:
-        params["projectKeyOrId"] = project_key
-    code, data, err = api_get(f"{JIRA_DOMAIN}/rest/agile/1.0/board", auth, params=params)
-    if code == 200 and data and data.get("values"):
-        return 200, data.get("values")[0], ""
-
-    code2, data2, err2 = api_get(
-        f"{JIRA_DOMAIN}/rest/agile/1.0/board", auth, params={"maxResults": 50}
-    )
-    if code2 == 200 and data2 and data2.get("values"):
-        return 200, data2.get("values")[0], ""
-    if code2 != 200:
-        return code2, None, f"ボード一覧取得に失敗: {err2}"
-    return 404, None, "ボードが見つかりませんでした"
+    return resolve_board_with_preferences(domain, fetch, project_key, board_id, context="jira_list_sprint_subtasks.resolve_board")
 
 
 def resolve_active_sprint(
@@ -230,42 +199,31 @@ def search_issues_jql(
     fields: Optional[List[str]] = None,
     batch_size: int = 100,
 ) -> Tuple[int, Optional[List[Dict[str, Any]]], str]:
-    start_at = 0
     all_issues: List[Dict[str, Any]] = []
     fields = fields or ["summary", "issuetype", "status", "subtasks", "assignee"]
+    page_token: Optional[str] = None
+    seen_tokens: set[str] = set()
 
     while True:
-        params = {
+        params: Dict[str, Any] = {
             "jql": jql,
             "fields": ",".join(fields),
-            "startAt": start_at,
-            "maxResults": batch_size,
+            "maxResults": max(1, min(batch_size, 5000)),
         }
-        code, data, err = api_get(f"{JIRA_DOMAIN}/rest/api/3/search", auth, params=params)
-        if code != 200 or not data:
-            body = {
-                "jql": jql,
-                "fields": fields,
-                "startAt": start_at,
-                "maxResults": batch_size,
-            }
-            code2, data2, err2 = api_post(f"{JIRA_DOMAIN}/rest/api/3/search", auth, body)
-            if code2 != 200 or not data2:
-                return code, None, f"JQL検索に失敗: {err or err2}"
-            data = data2
+        if page_token:
+            params["pageToken"] = page_token
+        code, data, err = api_get(f"{JIRA_DOMAIN}/rest/api/3/search/jql", auth, params=params)
+        if code != 200 or not isinstance(data, dict):
+            return code, None, f"JQL検索に失敗: {_format_search_error(data, err)}"
 
-        issues = data.get("issues") if isinstance(data, dict) else None
-        if issues is None and isinstance(data, dict):
-            issues = data.get("results") or data.get("data")
-        if issues is None:
-            return 200, [], ""
-
-        total = int(data.get("total", len(issues))) if isinstance(data, dict) else len(issues)
+        issues = data.get("issues") or []
         all_issues.extend(issues)
 
-        start_at += len(issues)
-        if start_at >= total or not issues:
+        page_token = data.get("nextPageToken")
+        is_last = data.get("isLast", True)
+        if not issues or not page_token or page_token in seen_tokens or is_last:
             break
+        seen_tokens.add(page_token)
 
     return 200, all_issues, ""
 

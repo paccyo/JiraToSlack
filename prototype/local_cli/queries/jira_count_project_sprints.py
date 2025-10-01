@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 from requests.auth import HTTPBasicAuth
 
+from prototype.local_cli.lib.board_selector import resolve_board_with_preferences
+
 
 def maybe_load_dotenv() -> None:
     try:
@@ -59,19 +61,17 @@ def api_get(url: str, auth: HTTPBasicAuth, params: Optional[Dict[str, Any]] = No
 
 
 def resolve_board(domain: str, auth: HTTPBasicAuth) -> Tuple[int, Optional[Dict[str, Any]], str]:
+    clean_domain = (domain or "").rstrip("/")
+    if not clean_domain:
+        return 400, None, "JIRA_DOMAIN が未設定です"
+
     board_id = os.getenv("JIRA_BOARD_ID")
     project_key = os.getenv("JIRA_PROJECT_KEY")
 
-    if board_id and board_id.isdigit():
-        return api_get(f"{domain}/rest/agile/1.0/board/{board_id}", auth)
+    def fetch(url: str, params: Optional[Dict[str, Any]] = None) -> Tuple[int, Optional[Dict[str, Any]], str]:
+        return api_get(url, auth, params=params)
 
-    params: Dict[str, Any] = {"maxResults": 50}
-    if project_key:
-        params["projectKeyOrId"] = project_key
-    code, data, err = api_get(f"{domain}/rest/agile/1.0/board", auth, params=params)
-    if code == 200 and data and data.get("values"):
-        return 200, data.get("values")[0], ""
-    return code, None, f"ボード一覧取得に失敗: {err}"
+    return resolve_board_with_preferences(clean_domain, fetch, project_key, board_id, context="jira_count_project_sprints.resolve_board")
 
 
 def list_all_sprints(domain: str, auth: HTTPBasicAuth, board_id: int, states: Optional[List[str]] = None) -> Tuple[int, List[Dict[str, Any]], str]:

@@ -1,7 +1,7 @@
 {
   "sprint": {
     "name": "SCRUM スプリント 4",
-    "startDate": "2025-09-25T01:54:22.028Z",
+    "startDate": "2025-09-25T01:54:22.000Z",
     "endDate": "2025-10-02T01:54:00.000Z"
   },
   "parents": [
@@ -72,6 +72,75 @@
         }
       ],
       "doneCount": 4,
+      "totalSubtasks": 5
+    },
+    {
+      "parentKey": "SCRUM-85",
+      "parentSummary": "レビュー",
+      "assignee": null,
+      "subtasks": [
+        {
+          "key": "SCRUM-86",
+          "summary": "レビュー結果の記録",
+          "status": "pending",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": null,
+          "typeName": "Subtask",
+          "created": "2025-09-25T18:04:01.427+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-87",
+          "summary": "ドキュメントの収集",
+          "status": "pending",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": null,
+          "typeName": "Subtask",
+          "created": "2025-09-25T18:04:01.433+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-88",
+          "summary": "フィードバックの提供",
+          "status": "pending",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": null,
+          "typeName": "Subtask",
+          "created": "2025-09-25T18:04:01.470+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-89",
+          "summary": "レビュー基準の確認",
+          "status": "pending",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": null,
+          "typeName": "Subtask",
+          "created": "2025-09-25T18:04:01.475+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-90",
+          "summary": "レビューの実施",
+          "status": "pending",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": null,
+          "typeName": "Subtask",
+          "created": "2025-09-25T18:04:01.504+0900",
+          "startedAt": null,
+          "completedAt": null
+        }
+      ],
+      "doneCount": 0,
       "totalSubtasks": 5
     },
     {
@@ -313,7 +382,7 @@
         {
           "key": "SCRUM-76",
           "summary": "ユースケースごとのドキュメント作成",
-          "status": "To Do",
+          "status": "pending",
           "done": false,
           "storyPoints": 1.0,
           "assignee": "福聖",
@@ -349,7 +418,7 @@
         {
           "key": "SCRUM-77",
           "summary": "ユースケースごとのドキュメントテンプレート作成",
-          "status": "To Do",
+          "status": "pending",
           "done": false,
           "storyPoints": 1.0,
           "assignee": "福聖",
@@ -432,75 +501,6 @@
       "totalSubtasks": 5
     },
     {
-      "parentKey": "SCRUM-85",
-      "parentSummary": "レビュー",
-      "assignee": null,
-      "subtasks": [
-        {
-          "key": "SCRUM-86",
-          "summary": "レビュー結果の記録",
-          "status": "To Do",
-          "done": false,
-          "storyPoints": 1.0,
-          "assignee": null,
-          "typeName": "Subtask",
-          "created": "2025-09-25T18:04:01.427+0900",
-          "startedAt": null,
-          "completedAt": null
-        },
-        {
-          "key": "SCRUM-87",
-          "summary": "ドキュメントの収集",
-          "status": "To Do",
-          "done": false,
-          "storyPoints": 1.0,
-          "assignee": null,
-          "typeName": "Subtask",
-          "created": "2025-09-25T18:04:01.433+0900",
-          "startedAt": null,
-          "completedAt": null
-        },
-        {
-          "key": "SCRUM-88",
-          "summary": "フィードバックの提供",
-          "status": "To Do",
-          "done": false,
-          "storyPoints": 1.0,
-          "assignee": null,
-          "typeName": "Subtask",
-          "created": "2025-09-25T18:04:01.470+0900",
-          "startedAt": null,
-          "completedAt": null
-        },
-        {
-          "key": "SCRUM-89",
-          "summary": "レビュー基準の確認",
-          "status": "To Do",
-          "done": false,
-          "storyPoints": 1.0,
-          "assignee": null,
-          "typeName": "Subtask",
-          "created": "2025-09-25T18:04:01.475+0900",
-          "startedAt": null,
-          "completedAt": null
-        },
-        {
-          "key": "SCRUM-90",
-          "summary": "レビューの実施",
-          "status": "To Do",
-          "done": false,
-          "storyPoints": 1.0,
-          "assignee": null,
-          "typeName": "Subtask",
-          "created": "2025-09-25T18:04:01.504+0900",
-          "startedAt": null,
-          "completedAt": null
-        }
-      ],
-      "doneCount": 0,
-      "totalSubtasks": 5
-    },
-    {
       "parentKey": "SCRUM-91",
       "parentSummary": "表記バグ",
       "assignee": null,
@@ -508,7 +508,7 @@
         {
           "key": "SCRUM-93",
           "summary": "レビュー依頼・コードレビューを実施する",
-          "status": "To Do",
+          "status": "pending",
           "done": false,
           "storyPoints": 1.0,
           "assignee": null,
@@ -520,7 +520,7 @@
         {
           "key": "SCRUM-94",
           "summary": "バグの再現手順を確認する",
-          "status": "To Do",
+          "status": "pending",
           "done": false,
           "storyPoints": 1.0,
           "assignee": null,
@@ -532,7 +532,7 @@
         {
           "key": "SCRUM-95",
           "summary": "表記バグの修正を行う",
-          "status": "To Do",
+          "status": "pending",
           "done": false,
           "storyPoints": 1.0,
           "assignee": null,
@@ -544,7 +544,7 @@
         {
           "key": "SCRUM-96",
           "summary": "修正内容の動作確認を行う",
-          "status": "To Do",
+          "status": "pending",
           "done": false,
           "storyPoints": 1.0,
           "assignee": null,
@@ -556,7 +556,7 @@
         {
           "key": "SCRUM-97",
           "summary": "該当箇所のコードを特定する",
-          "status": "To Do",
+          "status": "pending",
           "done": false,
           "storyPoints": 1.0,
           "assignee": null,
@@ -577,7 +577,7 @@
         {
           "key": "SCRUM-46",
           "summary": "テスト結果のレビューと報告",
-          "status": "To Do",
+          "status": "pending",
           "done": false,
           "storyPoints": 1.0,
           "assignee": null,
@@ -589,7 +589,7 @@
         {
           "key": "SCRUM-45",
           "summary": "テストケースの作成",
-          "status": "To Do",
+          "status": "pending",
           "done": false,
           "storyPoints": 1.0,
           "assignee": null,
@@ -601,7 +601,7 @@
         {
           "key": "SCRUM-44",
           "summary": "テスト環境の準備",
-          "status": "To Do",
+          "status": "pending",
           "done": false,
           "storyPoints": 1.0,
           "assignee": null,
@@ -613,7 +613,7 @@
         {
           "key": "SCRUM-47",
           "summary": "受け入れテストの実施",
-          "status": "To Do",
+          "status": "pending",
           "done": false,
           "storyPoints": 1.0,
           "assignee": null,
