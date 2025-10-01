@@ -65,28 +65,41 @@ def _sanitize_api_key(raw: Optional[str]) -> Optional[str]:
 
 
 def get_json_from_script(script_path: str, env_extra: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-    env = os.environ.copy()
-    if env_extra:
-    # .envファイルを複数パスから読み込む。Jira認証や各種設定値を環境変数としてセット。
-    # ログ出力が有効な場合は読み込んだ.envパスを表示。
-        env.update(env_extra)
-    env["OUTPUT_JSON"] = "1"
-    env["PYTHONUTF8"] = "1"
-    base_dir = Path(__file__).resolve().parent
-    proc = __import__("subprocess").run(
-        [sys.executable, "-X", "utf8", script_path],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        env=env,
-        cwd=str(base_dir),
-    )
-    if proc.returncode != 0:
-        print(proc.stdout)
-        print(proc.stderr, file=sys.stderr)
-        raise RuntimeError("データ取得に失敗しました")
-    line = proc.stdout.strip().splitlines()[-1]
-    return json.loads(line)
+    import traceback
+    import os
+    print(f"[DEBUG] get_json_from_script called with: {script_path}")
+    print(f"[DEBUG] CWD: {os.getcwd()}")
+    print(f"[DEBUG] ENV: JIRA_DOMAIN={os.environ.get('JIRA_DOMAIN')}, JIRA_EMAIL={os.environ.get('JIRA_EMAIL')}, JIRA_API_TOKEN={os.environ.get('JIRA_API_TOKEN')}")
+    try:
+        env = os.environ.copy()
+        if env_extra:
+        # .envファイルを複数パスから読み込む。Jira認証や各種設定値を環境変数としてセット。
+        # ログ出力が有効な場合は読み込んだ.envパスを表示。
+            env.update(env_extra)
+        env["OUTPUT_JSON"] = "1"
+        env["PYTHONUTF8"] = "1"
+        base_dir = Path(__file__).resolve().parent
+        proc = __import__("subprocess").run(
+            [sys.executable, "-X", "utf8", script_path],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=env,
+            cwd=str(base_dir),
+        )
+        if proc.returncode != 0:
+            print(proc.stdout)
+            print(proc.stderr, file=sys.stderr)
+            raise RuntimeError("データ取得に失敗しました")
+        line = proc.stdout.strip().splitlines()[-1]
+        return json.loads(line)
+    except Exception as e:
+        print(f"[ERROR] データ取得エラー: {e}")
+        print(f"[ERROR] script_path: {script_path}")
+        print(f"[ERROR] ファイル存在: {os.path.exists(script_path)}")
+        print(f"[ERROR] ファイル一覧: {os.listdir(os.path.dirname(script_path)) if os.path.exists(os.path.dirname(script_path)) else 'ディレクトリなし'}")
+        print(f"[ERROR] Traceback:\n{traceback.format_exc()}")
+        raise RuntimeError("データ取得に失敗しました") from e
 
 
 def get_json_from_script_args(script_path: str, args: List[str], env_extra: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
@@ -1177,10 +1190,8 @@ def draw_png(
         # fallback to subtask totals for sprint numbers to ensure consistency
         sprint_total_kpi = int(kpis_hdr.get("sprintTotal", 0))
         sprint_done_kpi = int(kpis_hdr.get("sprintDone", 0))
-        sprint_total_fb = total_cnt
-        sprint_done_fb = done_cnt
-        sprint_total = sprint_total_kpi or sprint_total_fb
-        sprint_done = sprint_done_kpi or sprint_done_fb
+        sprint_total = sprint_total_kpi 
+        sprint_done = sprint_done_kpi 
         done_pct = int(round(100 * (sprint_done / max(1, sprint_total))))
         tgt_pct = int(round(100 * target_done_rate))
         tx = velmini_box_x0 + 10
@@ -1626,8 +1637,8 @@ def draw_png(
         sprint_label = f"{sprint_label} ({d0}-{d1})"
     # KPI numbers if available
     kpi_data = (extras or {}).get("kpis", {}) if extras else {}
-    sprint_total = int(kpi_data.get("sprintTotal", total_cnt))
-    sprint_done = int(kpi_data.get("sprintDone", done_cnt))
+    sprint_total = int(kpi_data.get("sprintTotal", 0))
+    sprint_done = int(kpi_data.get("sprintDone", 0))
     # time-in-status Review avg (days)
     review_avg = None
     tis_obj = (extras or {}).get("time_in_status") if extras else None
@@ -1670,7 +1681,7 @@ def draw_png(
     try:
         kpi_data = (extras or {}).get("kpis", {}) if extras else {}
         project_open_total = int(kpi_data.get("projectOpenTotal", 0))
-        sprint_open = sprint_total - sprint_done
+        sprint_open = int(kpi_data.get("sprintOpen", 0))  # 直接sprintOpenを使用
         backlog_open = max(0, project_open_total - sprint_open)
         
         # Velocity関連の計算
@@ -1921,7 +1932,7 @@ def draw_png(
                     else:
                         # last visible line with ellipsis
                         last = ln
-                        ell = " …"
+                        ell = "…"
                         while last and g.textlength(last + ell, font=content_font) > content_w:
                             last = last[:-1]
                         g.text((content_x, y), (last + ell) if last else "…", font=content_font, fill=col_text)
@@ -2398,9 +2409,9 @@ def main() -> int:
         md.append(f"What: {sprint_label} — {sprint_total} tasks, Done {sprint_done} ({int((sprint_done/max(1,sprint_total))*100)}%). (data: sprint_total={sprint_total}, sprint_done={sprint_done})")
         if (sprint_done / max(1, sprint_total)) < target_done_rate:
             if review_avg is not None:
-                md.append(f"So what: 目標{target_pct}%未達、レビュー滞留 (data: time_in_status[Review].avg={review_avg:.1f}d)")
+                md.append(f"So what: 目標{target_done_rate*100}%未達、レビュー滞留 (data: time_in_status[Review].avg={review_avg:.1f}d)")
             else:
-                md.append(f"So what: 目標{target_pct}%未達")
+                md.append(f"So what: 目標{target_done_rate*100}%未達")
         else:
             md.append("So what: 目標達成ペース")
         md.append(f"Next: 高優先度未完了{hp_cnt}件の即時割当、レビュー担当の増員検討")
