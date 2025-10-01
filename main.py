@@ -68,3 +68,8 @@ def main_handler(req):
         return handle_pubsub_message(body)
     
     return slack_handler.handle(req)
+
+
+# Cloud Functions entry point shim (for gcloud --entry-point=handle_slack_events)
+def handle_slack_events(req):
+    return main_handler(req)

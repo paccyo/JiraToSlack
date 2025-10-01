@@ -88,6 +88,11 @@ def get_json_from_script(script_path: str, env_extra: Optional[Dict[str, str]] =
         env["OUTPUT_JSON"] = "1"
         env["PYTHONUTF8"] = "1"
         base_dir = Path(__file__).resolve().parent
+        # Ensure subprocess can import local packages such as prototype/local_cli/lib
+        search_paths = [str(base_dir), str(base_dir.parent), str(Path(__file__).resolve().parents[2])]
+        existing_py_path = env.get("PYTHONPATH")
+        composed = os.pathsep.join([p for p in search_paths if p] + ([existing_py_path] if existing_py_path else []))
+        env["PYTHONPATH"] = composed
         proc = __import__("subprocess").run(
             [sys.executable, "-X", "utf8", script_path],
             capture_output=True,
@@ -96,12 +101,27 @@ def get_json_from_script(script_path: str, env_extra: Optional[Dict[str, str]] =
             env=env,
             cwd=str(base_dir),
         )
+        print(f"[DEBUG] subprocess returncode={proc.returncode}")
+        if proc.stdout:
+            preview = proc.stdout[-1000:]
+            print(f"[DEBUG] subprocess stdout (tail 1000 chars)=\n{preview}")
+        if proc.stderr:
+            preview_err = proc.stderr[-1000:]
+            print(f"[DEBUG] subprocess stderr (tail 1000 chars)=\n{preview_err}", file=sys.stderr)
+
         if proc.returncode != 0:
+            raise RuntimeError(f"サブプロセス終了コード異常: rc={proc.returncode}")
+
+        stripped = proc.stdout.strip().splitlines()
+        if not stripped:
+            raise RuntimeError("サブプロセス出力が空です")
+        line = stripped[-1]
+        try:
+            return json.loads(line)
+        except json.JSONDecodeError as json_err:
+            print("[ERROR] JSON decode failed. Full stdout follows:")
             print(proc.stdout)
-            print(proc.stderr, file=sys.stderr)
-            raise RuntimeError("データ取得に失敗しました")
-        line = proc.stdout.strip().splitlines()[-1]
-        return json.loads(line)
+            raise RuntimeError("サブプロセスのJSON出力解析に失敗しました") from json_err
     except Exception as e:
         print(f"[ERROR] データ取得エラー: {e}")
         print(f"[ERROR] script_path: {script_path}")
@@ -119,6 +139,10 @@ def get_json_from_script_args(script_path: str, args: List[str], env_extra: Opti
     env["OUTPUT_JSON"] = "1"
     env["PYTHONUTF8"] = "1"
     base_dir = Path(__file__).resolve().parent
+    search_paths = [str(base_dir), str(base_dir.parent), str(Path(__file__).resolve().parents[2])]
+    existing_py_path = env.get("PYTHONPATH")
+    composed = os.pathsep.join([p for p in search_paths if p] + ([existing_py_path] if existing_py_path else []))
+    env["PYTHONPATH"] = composed
     proc = __import__("subprocess").run(
         [sys.executable, "-X", "utf8", script_path, *args],
         capture_output=True,
@@ -127,12 +151,23 @@ def get_json_from_script_args(script_path: str, args: List[str], env_extra: Opti
         env=env,
         cwd=str(base_dir),
     )
+    print(f"[DEBUG] get_json_from_script_args returncode={proc.returncode} path={script_path} args={args}")
+    if proc.stdout:
+        print(f"[DEBUG] subprocess stdout (tail 1000 chars)=\n{proc.stdout[-1000:]}")
+    if proc.stderr:
+        print(f"[DEBUG] subprocess stderr (tail 1000 chars)=\n{proc.stderr[-1000:]}", file=sys.stderr)
     if proc.returncode != 0:
+        raise RuntimeError(f"データ取得に失敗しました: {script_path} {' '.join(args)} (rc={proc.returncode})")
+    stripped = proc.stdout.strip().splitlines()
+    if not stripped:
+        raise RuntimeError(f"サブプロセス出力が空です: {script_path} {' '.join(args)}")
+    line = stripped[-1]
+    try:
+        return json.loads(line)
+    except json.JSONDecodeError as json_err:
+        print("[ERROR] JSON decode failed. Full stdout follows:")
         print(proc.stdout)
-        print(proc.stderr, file=sys.stderr)
-        raise RuntimeError(f"データ取得に失敗しました: {script_path} {' '.join(args)}")
-    line = proc.stdout.strip().splitlines()[-1]
-    return json.loads(line)
+        raise RuntimeError(f"サブプロセスJSON解析に失敗しました: {script_path} {' '.join(args)}") from json_err
 
     # 指定Pythonスクリプトをサブプロセスで実行し、JSON出力を取得。
     # env_extraで追加環境変数を渡せる。失敗時は例外。
