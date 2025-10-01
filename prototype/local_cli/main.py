@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from PIL import Image, ImageDraw, ImageFont
@@ -73,6 +74,54 @@ def _sanitize_api_key(raw: Optional[str]) -> Optional[str]:
     return filtered or None
 
 
+def _run_python_script(
+    script_path: str,
+    args: Optional[List[str]],
+    env: Dict[str, str],
+) -> Tuple[subprocess.CompletedProcess[str], bool]:
+    """Execute a Python script preferring module execution for reliable imports.
+
+    Returns (completed_process, used_module_flag)."""
+    script = Path(script_path).resolve()
+    repo_root = Path(__file__).resolve().parents[2]
+    base_dir = Path(__file__).resolve().parent
+    module_cmd: Optional[List[str]] = None
+    try:
+        rel = script.relative_to(repo_root)
+        module_name = ".".join(rel.with_suffix("").parts)
+        module_cmd = [sys.executable, "-X", "utf8", "-m", module_name]
+        if args:
+            module_cmd.extend(args)
+    except ValueError:
+        module_cmd = None
+
+    direct_cmd = [sys.executable, "-X", "utf8", str(script)]
+    if args:
+        direct_cmd.extend(args)
+
+    def _exec(cmd: List[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=env,
+            cwd=str(cwd),
+        )
+
+    if module_cmd:
+        proc = _exec(module_cmd, repo_root)
+        if proc.returncode == 0:
+            return proc, True
+        print(
+            f"[DEBUG] module execution failed (rc={proc.returncode}) for {script_path}, falling back to direct path",
+            file=sys.stderr,
+        )
+
+    proc = _exec(direct_cmd, base_dir)
+    return proc, False
+
+
 def get_json_from_script(script_path: str, env_extra: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     import traceback
     import os
@@ -93,15 +142,10 @@ def get_json_from_script(script_path: str, env_extra: Optional[Dict[str, str]] =
         existing_py_path = env.get("PYTHONPATH")
         composed = os.pathsep.join([p for p in search_paths if p] + ([existing_py_path] if existing_py_path else []))
         env["PYTHONPATH"] = composed
-        proc = __import__("subprocess").run(
-            [sys.executable, "-X", "utf8", script_path],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            env=env,
-            cwd=str(base_dir),
-        )
+        proc, used_module = _run_python_script(script_path, None, env)
         print(f"[DEBUG] subprocess returncode={proc.returncode}")
+        if used_module:
+            print(f"[DEBUG] executed via module import for {script_path}")
         if proc.stdout:
             preview = proc.stdout[-1000:]
             print(f"[DEBUG] subprocess stdout (tail 1000 chars)=\n{preview}")
@@ -143,15 +187,10 @@ def get_json_from_script_args(script_path: str, args: List[str], env_extra: Opti
     existing_py_path = env.get("PYTHONPATH")
     composed = os.pathsep.join([p for p in search_paths if p] + ([existing_py_path] if existing_py_path else []))
     env["PYTHONPATH"] = composed
-    proc = __import__("subprocess").run(
-        [sys.executable, "-X", "utf8", script_path, *args],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        env=env,
-        cwd=str(base_dir),
-    )
+    proc, used_module = _run_python_script(script_path, args, env)
     print(f"[DEBUG] get_json_from_script_args returncode={proc.returncode} path={script_path} args={args}")
+    if used_module:
+        print(f"[DEBUG] executed via module import for {script_path}")
     if proc.stdout:
         print(f"[DEBUG] subprocess stdout (tail 1000 chars)=\n{proc.stdout[-1000:]}")
     if proc.stderr:

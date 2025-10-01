@@ -120,10 +120,12 @@ def register_commands(app):
                 return
             try:
                 print(f"LOG: uploading image from path: {image_path} to channel: {channel_id}")
-                app.client.files_upload(
-                    channels=channel_id,
+                app.client.files_upload_v2(
+                    channel=channel_id,
                     file=image_path,
-                    title="Jiraバックログダッシュボード"
+                    filename=os.path.basename(image_path),
+                    title="Jiraバックログダッシュボード",
+                    initial_comment="Jiraバックログダッシュボードをアップロードしました",
                 )
                 print("LOG: image upload completed")
                 say("画像を送信しました")
