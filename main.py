@@ -47,7 +47,7 @@ def handle_pubsub_message(data: dict):
         if message_data.get("flag") == "execute_special_task":
             # ロジックをSchedulerTaskHandlerに委譲
             task_handler = SchedulerTaskHandler()
-            result = task_handler.execute(app, db, message_data_str)
+            result = task_handler.execute(app, db, message_data)
             print(result)
         
         else:
@@ -65,6 +65,7 @@ def main_handler(req):
     リクエストを検査し、Pub/SubかSlackかに応じて処理を振り分ける
     """
     body = req.get_json(silent=True)
+    print(f"Request body: {body}")
 
     if body and "message" in body and "data" in body["message"]:
         return handle_pubsub_message(body)

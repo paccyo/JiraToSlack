@@ -6,7 +6,7 @@ from datetime import datetime, date
 from util.request_jira import RequestJiraRepository
 
 class SchedulerTaskHandler:
-    def execute(self, app, db, message_data_str):
+    def execute(self, app, db, message_data):
         """
         Firestoreから全ユーザーを取得し、Slack DMを送信する
         """
@@ -26,7 +26,7 @@ class SchedulerTaskHandler:
             sent_count = 0
             for user_doc in users_ref:
                 user_data = user_doc.to_dict()
-                user_email = user_data.get("email")
+                user_email = user_data.get("jira_email")
 
                 if not user_email:
                     print(f"ドキュメント {user_doc.id} にemailフィールドがありません。スキップします。")

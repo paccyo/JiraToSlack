@@ -241,12 +241,11 @@ class RequestJiraRepository:
             
             transition_id = None
             for t in transitions:
-                # --- ↓↓↓ ここを修正 ↓↓↓ ---
-                # 渡されたstatus引数と移動先のステータス名を比較する
-                # .lower()で両方を小文字にすると、大文字/小文字の違いを吸収できて安全
+                # 渡されたstatus引数と移動先のステータス名を比較
+                # .lower()で両方を小文字にし、大文字/小文字の違いを吸収
                 if t['to']['name'].lower() == status.lower():
                     transition_id = t['id']
-                    break # 一致するものが見つかったらループを抜ける
+                    break 
             
             if transition_id:
                 self.jira_client.transition_issue(issue_key, transition_id)
