@@ -168,6 +168,61 @@ class RequestJqlRepository:
                         "text": f"*完了日*: {resolution_date}"
                     }
                 ]
-            }
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "ToDo",
+                            "emoji": True
+                        },
+                        "value": issue,
+                        "action_id": "move_Todo"
+                    },
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "進行中",
+                            "emoji": True
+                        },
+                        "value": issue,
+                        "action_id": "move_in_pending"
+                    },
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "レビュー中",
+                            "emoji": True
+                        },
+                        "value": issue,
+                        "action_id": "move_reviewing"
+                    },
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Abort",
+                            "emoji": True
+                        },
+                        "value": issue,
+                        "action_id": "move_abort"
+                    },
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "完了",
+                            "emoji": True
+                        },
+                        "value": issue,
+                        "action_id": "move_completed"
+                    }
+                ]
+            },
         ]
         return blocks
