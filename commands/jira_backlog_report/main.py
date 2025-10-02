@@ -4,10 +4,14 @@ import sys
 from pathlib import Path
 
 try:
-    from prototype.local_cli.lib.env_loader import ensure_env_loaded, build_process_env
+    from prototype.local_cli.Loder.dotenv_loader import ensure_env_loaded, build_process_env
 except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
-    sys.path.append(str(Path(__file__).resolve().parents[1] / "prototype" / "local_cli"))
-    from env_loader import ensure_env_loaded, build_process_env  # type: ignore
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "prototype").exists():
+            sys.path.append(str(parent))
+            break
+    from prototype.local_cli.Loder.dotenv_loader import ensure_env_loaded, build_process_env  # type: ignore
 
 
 ensure_env_loaded()

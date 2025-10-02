@@ -363,75 +363,6 @@
       "totalSubtasks": 5
     },
     {
-      "parentKey": "SCRUM-73",
-      "parentSummary": "各ユースケース別のドキュメント生成",
-      "assignee": "福聖",
-      "subtasks": [
-        {
-          "key": "SCRUM-74",
-          "summary": "ユースケースのリストアップ",
-          "status": "完了",
-          "done": true,
-          "storyPoints": 1.0,
-          "assignee": "福聖",
-          "typeName": "Subtask",
-          "created": "2025-09-25T11:42:07.785+0900",
-          "startedAt": null,
-          "completedAt": "2025-09-25T17:37:00.798+0900"
-        },
-        {
-          "key": "SCRUM-76",
-          "summary": "ユースケースごとのドキュメント作成",
-          "status": "pending",
-          "done": false,
-          "storyPoints": 1.0,
-          "assignee": "福聖",
-          "typeName": "Subtask",
-          "created": "2025-09-25T11:42:07.802+0900",
-          "startedAt": null,
-          "completedAt": null
-        },
-        {
-          "key": "SCRUM-75",
-          "summary": "ユースケースごとの要件整理",
-          "status": "IN_progress",
-          "done": false,
-          "storyPoints": 1.0,
-          "assignee": "福聖",
-          "typeName": "Subtask",
-          "created": "2025-09-25T11:42:07.801+0900",
-          "startedAt": "2025-09-25T17:37:05.478+0900",
-          "completedAt": null
-        },
-        {
-          "key": "SCRUM-78",
-          "summary": "ドキュメントのレビューと修正",
-          "status": "完了",
-          "done": true,
-          "storyPoints": 1.0,
-          "assignee": "福聖",
-          "typeName": "Subtask",
-          "created": "2025-09-25T11:42:07.831+0900",
-          "startedAt": null,
-          "completedAt": "2025-09-25T17:37:08.968+0900"
-        },
-        {
-          "key": "SCRUM-77",
-          "summary": "ユースケースごとのドキュメントテンプレート作成",
-          "status": "pending",
-          "done": false,
-          "storyPoints": 1.0,
-          "assignee": "福聖",
-          "typeName": "Subtask",
-          "created": "2025-09-25T11:42:07.831+0900",
-          "startedAt": null,
-          "completedAt": null
-        }
-      ],
-      "doneCount": 2,
-      "totalSubtasks": 5
-    },
-    {
       "parentKey": "SCRUM-79",
       "parentSummary": "プロンプトの品質向上",
       "assignee": "福聖",
@@ -625,6 +556,75 @@
       ],
       "doneCount": 0,
       "totalSubtasks": 4
+    },
+    {
+      "parentKey": "SCRUM-73",
+      "parentSummary": "各ユースケース別のドキュメント生成",
+      "assignee": "福聖",
+      "subtasks": [
+        {
+          "key": "SCRUM-74",
+          "summary": "ユースケースのリストアップ",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-25T11:42:07.785+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-25T17:37:00.798+0900"
+        },
+        {
+          "key": "SCRUM-76",
+          "summary": "ユースケースごとのドキュメント作成",
+          "status": "pending",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-25T11:42:07.802+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-75",
+          "summary": "ユースケースごとの要件整理",
+          "status": "IN_progress",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-25T11:42:07.801+0900",
+          "startedAt": "2025-09-25T17:37:05.478+0900",
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-78",
+          "summary": "ドキュメントのレビューと修正",
+          "status": "完了",
+          "done": true,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-25T11:42:07.831+0900",
+          "startedAt": null,
+          "completedAt": "2025-09-25T17:37:08.968+0900"
+        },
+        {
+          "key": "SCRUM-77",
+          "summary": "ユースケースごとのドキュメントテンプレート作成",
+          "status": "pending",
+          "done": false,
+          "storyPoints": 1.0,
+          "assignee": "福聖",
+          "typeName": "Subtask",
+          "created": "2025-09-25T11:42:07.831+0900",
+          "startedAt": null,
+          "completedAt": null
+        }
+      ],
+      "doneCount": 2,
+      "totalSubtasks": 5
     }
   ],
   "totals": {

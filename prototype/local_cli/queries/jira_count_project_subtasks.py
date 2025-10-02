@@ -4,12 +4,16 @@ import argparse
 from pathlib import Path
 
 try:
-    from prototype.local_cli.lib.env_loader import ensure_env_loaded
-    from prototype.local_cli.lib.jira_client import JiraClient  # type: ignore
+    from prototype.local_cli.Loder.dotenv_loader import ensure_env_loaded
+    from prototype.local_cli.Loder.jira_client import JiraClient  # type: ignore
 except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
-    sys.path.append(str(Path(__file__).resolve().parents[1]))
-    from env_loader import ensure_env_loaded  # type: ignore
-    from lib.jira_client import JiraClient  # type: ignore
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "prototype").exists():
+            sys.path.append(str(parent))
+            break
+    from prototype.local_cli.Loder.dotenv_loader import ensure_env_loaded  # type: ignore
+    from prototype.local_cli.Loder.jira_client import JiraClient  # type: ignore
 
 
 ensure_env_loaded()

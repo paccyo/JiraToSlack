@@ -7,18 +7,25 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 try:
-    from prototype.local_cli.lib.env_loader import ensure_env_loaded
+    from prototype.local_cli.Loder.dotenv_loader import ensure_env_loaded
 except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
-    sys.path.append(str(Path(__file__).resolve().parents[1]))
-    from env_loader import ensure_env_loaded  # type: ignore
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "prototype").exists():
+            sys.path.append(str(parent))
+            break
+    from prototype.local_cli.Loder.dotenv_loader import ensure_env_loaded  # type: ignore
 
 # Use fully qualified import so tests can monkeypatch consistently
 try:
-    from prototype.local_cli.lib.jira_client import JiraClient  # type: ignore
+    from prototype.local_cli.Loder.jira_client import JiraClient  # type: ignore
 except ModuleNotFoundError:
-    # When executed as a script by path, ensure parent is on sys.path
-    sys.path.append(str(Path(__file__).resolve().parents[1]))
-    from lib.jira_client import JiraClient  # type: ignore
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "prototype").exists():
+            sys.path.append(str(parent))
+            break
+    from prototype.local_cli.Loder.jira_client import JiraClient  # type: ignore
 
 
 ensure_env_loaded()

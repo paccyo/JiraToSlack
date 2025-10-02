@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 import pytest
 import requests
-from prototype.local_cli.lib.jira_client import JiraClient
+from prototype.local_cli.Loder.jira_client import JiraClient
 
 
 def _mk_url(domain, path):

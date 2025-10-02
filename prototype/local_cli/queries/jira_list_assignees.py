@@ -12,17 +12,21 @@ from pathlib import Path
 from requests.auth import HTTPBasicAuth
 
 try:
-    from prototype.local_cli.lib.env_loader import ensure_env_loaded
+    from prototype.local_cli.Loder.dotenv_loader import ensure_env_loaded
 except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
-    sys.path.append(str(Path(__file__).resolve().parents[1]))
-    from env_loader import ensure_env_loaded  # type: ignore
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "prototype").exists():
+            sys.path.append(str(parent))
+            break
+    from prototype.local_cli.Loder.dotenv_loader import ensure_env_loaded  # type: ignore
 ensure_env_loaded()
 # --- libディレクトリの絶対パスをsys.pathに追加（Pylanceのimportエラー対策） ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
 lib_dir = os.path.abspath(os.path.join(current_dir, '..', 'lib'))
 if lib_dir not in sys.path:
     sys.path.insert(0, lib_dir)
-from ..lib.jira_client import JiraClient  # prototype/local_cli/lib/jira_client.py を明示的に参照
+from ..Loder.jira_client import JiraClient  # prototype/local_cli/lib/jira_client.py を明示的に参照
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Jira課題から担当者名一覧を取得")
