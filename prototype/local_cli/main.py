@@ -118,12 +118,6 @@ def get_json_from_script(script_path: str, env_extra: Optional[Dict[str, str]] =
             env.update(env_extra)
         env["OUTPUT_JSON"] = "1"
         env["PYTHONUTF8"] = "1"
-        base_dir = Path(__file__).resolve().parent
-        # Ensure subprocess can import local packages such as prototype/local_cli/lib
-        search_paths = [str(base_dir), str(base_dir.parent), str(Path(__file__).resolve().parents[2])]
-        existing_py_path = env.get("PYTHONPATH")
-        composed = os.pathsep.join([p for p in search_paths if p] + ([existing_py_path] if existing_py_path else []))
-        env["PYTHONPATH"] = composed
         proc, used_module = _run_python_script(script_path, None, env)
         print(f"[DEBUG] subprocess returncode={proc.returncode}")
         if used_module:
@@ -164,11 +158,6 @@ def get_json_from_script_args(script_path: str, args: List[str], env_extra: Opti
         env.update(env_extra)
     env["OUTPUT_JSON"] = "1"
     env["PYTHONUTF8"] = "1"
-    base_dir = Path(__file__).resolve().parent
-    search_paths = [str(base_dir), str(base_dir.parent), str(Path(__file__).resolve().parents[2])]
-    existing_py_path = env.get("PYTHONPATH")
-    composed = os.pathsep.join([p for p in search_paths if p] + ([existing_py_path] if existing_py_path else []))
-    env["PYTHONPATH"] = composed
     proc, used_module = _run_python_script(script_path, args, env)
     print(f"[DEBUG] get_json_from_script_args returncode={proc.returncode} path={script_path} args={args}")
     if used_module:

@@ -17,13 +17,8 @@ def run_dashboard_and_get_image():
     try:
         repo_root = Path(__file__).resolve().parents[2]
         base_env = build_process_env()
-        search_paths = [str(repo_root), str(repo_root / "prototype"), str(repo_root / "prototype" / "local_cli")]
-        existing_py_path = base_env.get("PYTHONPATH")
-        base_env["PYTHONPATH"] = os.pathsep.join(
-            [p for p in search_paths if p] + ([existing_py_path] if existing_py_path else [])
-        )
         subprocess.run(
-            [sys.executable, "-X", "utf8", "prototype/local_cli/main.py"],
+            [sys.executable, "-X", "utf8", "-m", "prototype.local_cli.main"],
             check=True,
             cwd=str(repo_root),
             env=base_env,
