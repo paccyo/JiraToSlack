@@ -1,25 +1,19 @@
 # from prompts import get_system_prompt_generate_jql, JQLQuerySchema
-# from request_jql import RequestJqlRepository
+# from request_jql import RequestJiraRepository
 
 from commands.jira_get_tasks.prompts import get_system_prompt_generate_jql, JQLQuerySchema
-from util.request_jql import RequestJqlRepository
+from util.request_jira import RequestJiraRepository
 
 import os
 import sys
 import json
 import re
-from pathlib import Path
-
-try:
-    from prototype.local_cli.lib.env_loader import ensure_env_loaded
-except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
-    sys.path.append(str(Path(__file__).resolve().parents[2] / "prototype" / "local_cli"))
-    from env_loader import ensure_env_loaded  # type: ignore
-
-ensure_env_loaded()
-
 from google import genai
 from google.genai import types
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class CommandJiraGetTasksRepository:
     
@@ -54,15 +48,15 @@ class CommandJiraGetTasksRepository:
             # return responce_result
             try:
                 # JQLリクエスト
-                request_jql_repository = RequestJqlRepository()
-                jql_query = request_jql_repository.build_jql_from_json(gemini_result)
+                request_jira_repository = RequestJiraRepository()
+                jql_query = request_jira_repository.build_jql_from_json(gemini_result)
                 limit = gemini_result.get("limit")
-                jira_results = request_jql_repository.execute(jql_query, max_results=limit)
+                jira_results = request_jira_repository.request_jql(jql_query, max_results=limit)
                 
                 responce = {}
 
                 for jira_result in jira_results:
-                    block = request_jql_repository.format_jira_issue_for_slack(jira_result)
+                    block = request_jira_repository.format_jira_issue_for_slack(jira_result)
                     responce[jira_result.key] = block
 
                 return responce
@@ -79,7 +73,6 @@ class CommandJiraGetTasksRepository:
         
 
 if __name__ == "__main__":
-    ensure_env_loaded()
     query = "今日の13:00から14:00の間に完了したタスク"
     repository = CommandJiraGetTasksRepository()
     print(f"resuest query:{query}")

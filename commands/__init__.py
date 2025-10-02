@@ -1,14 +1,6 @@
 import os
 import sys
-from pathlib import Path
 
-try:
-    from prototype.local_cli.lib.env_loader import ensure_env_loaded
-except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
-    sys.path.append(str(Path(__file__).resolve().parents[1] / "prototype" / "local_cli"))
-    from env_loader import ensure_env_loaded  # type: ignore
-
-ensure_env_loaded()
 
 from commands.jira.main import CommandJiraRepository
 from commands.jira_get_tasks.main import CommandJiraGetTasksRepository

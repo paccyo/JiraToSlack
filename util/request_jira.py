@@ -1,24 +1,18 @@
 import os
-import sys
-from pathlib import Path
-from jira import JIRA
+from jira import JIRA, JIRAError
 from datetime import datetime
 
-try:
-    from prototype.local_cli.lib.env_loader import ensure_env_loaded
-except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
-    sys.path.append(str(Path(__file__).resolve().parents[1] / "prototype" / "local_cli"))
-    from env_loader import ensure_env_loaded  # type: ignore
+from dotenv import load_dotenv
 
+load_dotenv()
 
-ensure_env_loaded()
-
-class RequestJqlRepository:
+class RequestJiraRepository:
     def __init__(self):
         # 環境変数の読み込み
         JIRA_SERVER = os.getenv("JIRA_DOMAIN")
         JIRA_EMAIL = os.getenv("JIRA_EMAIL")
         JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN")
+        self.project_key = os.getenv("JIRA_PROJECT_KEY")
         try:
             # メールアドレスとAPIトークンで認証し、Jiraに接続
             self.jira_client = JIRA(
@@ -34,7 +28,7 @@ class RequestJqlRepository:
             return None
 
 
-    def execute(self, query, max_results=False):
+    def request_jql(self, query, max_results=False):
         print(f"request jql query: \n{query}")
         try:
             # JQLを実行して課題を検索
@@ -47,7 +41,11 @@ class RequestJqlRepository:
     
     def build_jql_from_json(self, data: dict) -> str:
 
-        conditions = []
+        
+        if self.project_key:
+            conditions = [f'project = "{self.project_key}"']
+        else:
+            conditions = []
 
         # JQL内で引用符で囲む必要のない特別なキーワードや関数を定義
         jql_keywords = {
@@ -179,6 +177,78 @@ class RequestJqlRepository:
                         "text": f"*完了日*: {resolution_date}"
                     }
                 ]
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "ToDo",
+                            "emoji": True
+                        },
+                        "value": issue.key,
+                        "action_id": "move_Todo"
+                    },
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "In_progress",
+                            "emoji": True
+                        },
+                        "value": issue.key,
+                        "action_id": "move_in_progress"
+                    },
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Abort",
+                            "emoji": True
+                        },
+                        "value": issue.key,
+                        "action_id": "move_abort"
+                    },
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "完了",
+                            "emoji": True
+                        },
+                        "value": issue.key,
+                        "action_id": "move_compleated"
+                    }
+                ]
             }
         ]
         return blocks
+    
+    def issue_change_status(self, user_email, issue_key, status):
+        """Jira課題を完了ステータスに移動させる関数（バックグラウンドで実行）"""
+        print(f"Starting Jira completion process for issue: {issue_key} by user {user_email}")
+        done_status_names = ["完了", "done", "closed", "解決済み"]
+
+        try:
+            transitions = self.jira_client.transitions(issue_key)
+            
+            transition_id = None
+            for t in transitions:
+                if t['to']['name'].lower() in done_status_names:
+                    transition_id = t['id']
+                    break
+            
+            if transition_id:
+                self.jira_client.transition_issue(issue_key, transition_id)
+                print(f"✅ Successfully transitioned issue {issue_key}")
+                # ここでユーザーにDMを送るなどの成功通知も可能
+                # app.client.chat_postMessage(channel=user_id, text=f"Jira課題 `{issue_key}` を完了にしました。")
+            else:
+                print(f"⚠️ Could not find a 'Done' transition for issue {issue_key}")
+
+        except JIRAError as e:
+            print(f"❌ Jira API Error for issue {issue_key}: Status {e.status_code} - {e.text}")
+        except Exception as e:
+            print(f"❌ An unexpected error occurred: {e}")
