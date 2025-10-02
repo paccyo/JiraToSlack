@@ -8,22 +8,14 @@ from pathlib import Path
 import requests
 from requests.auth import HTTPBasicAuth
 
+try:
+    from prototype.local_cli.lib.env_loader import ensure_env_loaded
+except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
+    from env_loader import ensure_env_loaded  # type: ignore
 
-def maybe_load_dotenv() -> None:
-    try:
-        from dotenv import load_dotenv  # type: ignore
-    except Exception:
-        return
-    script_dir = Path(__file__).resolve().parent
-    candidates = [
-        script_dir.parent / ".env",  # prototype/local_cli/.env
-        script_dir / ".env",         # queries/.env (fallback)
-        Path.cwd() / ".env",
-        Path(__file__).resolve().parents[2] / ".env",
-    ]
-    for p in candidates:
-        if p.exists():
-            load_dotenv(p, override=False)
+
+ensure_env_loaded()
 
 
 def api_get(url: str, auth: HTTPBasicAuth, params: Optional[Dict[str, Any]] = None) -> tuple[int, Optional[Dict[str, Any]], str]:
@@ -82,7 +74,6 @@ def required_env(key: str) -> str:
 
 
 def main() -> int:
-    maybe_load_dotenv()
     parser = argparse.ArgumentParser(description="Jira課題数をカウントします")
     parser.add_argument("--jql", help="JQL を直接指定")
     parser.add_argument("--scope", choices=["sprint", "project"], help="簡易JQLのスコープ")

@@ -7,7 +7,16 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 from requests.auth import HTTPBasicAuth
 
+try:
+    from prototype.local_cli.lib.env_loader import ensure_env_loaded
+except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
+    from env_loader import ensure_env_loaded  # type: ignore
+
 from prototype.local_cli.lib.board_selector import resolve_board_with_preferences
+
+
+ensure_env_loaded()
 
 
 def load_env(key: str) -> str:
@@ -16,25 +25,6 @@ def load_env(key: str) -> str:
         print(f"環境変数が未設定です: {key}", file=sys.stderr)
         sys.exit(2)
     return value
-
-
-def maybe_load_dotenv() -> None:
-    try:
-        from dotenv import load_dotenv  # type: ignore
-    except Exception:
-        return
-
-    script_dir = Path(__file__).resolve().parent
-    # Prefer the local_cli/.env over workspace root
-    candidates = [
-        script_dir.parent / ".env",  # c:/.../prototype/local_cli/.env
-        script_dir / ".env",         # c:/.../prototype/local_cli/queries/.env (fallback)
-        Path.cwd() / ".env",          # current working dir
-        Path(__file__).resolve().parents[2] / ".env",  # repo root
-    ]
-    for p in candidates:
-        if p.exists():
-            load_dotenv(p, override=False)
 
 
 def api_get(
@@ -598,7 +588,6 @@ def list_and_print_subtasks(
 
 
 def main() -> int:
-    maybe_load_dotenv()
     JIRA_DOMAIN = load_env("JIRA_DOMAIN").rstrip("/")
     email = load_env("JIRA_EMAIL")
     api_token = load_env("JIRA_API_TOKEN")

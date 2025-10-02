@@ -7,28 +7,16 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 from requests.auth import HTTPBasicAuth
 
+try:
+    from prototype.local_cli.lib.env_loader import ensure_env_loaded
+except ModuleNotFoundError:
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
+    from env_loader import ensure_env_loaded  # type: ignore
+
 from prototype.local_cli.lib.board_selector import resolve_board_with_preferences
 
 
-def maybe_load_dotenv() -> None:
-    try:
-        from dotenv import load_dotenv  # type: ignore
-    except Exception:
-        return
-
-    script_dir = Path(__file__).resolve().parent
-    candidates = [
-        script_dir.parent / ".env",  # .../prototype/local_cli/.env
-        script_dir / ".env",          # .../prototype/local_cli/queries/.env
-        Path.cwd() / ".env",          # current working dir
-        Path(__file__).resolve().parents[2] / ".env",  # repo root (best-effort)
-    ]
-    for p in candidates:
-        try:
-            if p.exists():
-                load_dotenv(p, override=False)
-        except Exception:
-            pass
+ensure_env_loaded()
 
 
 def required_env(key: str) -> str:
@@ -97,7 +85,6 @@ def list_all_sprints(domain: str, auth: HTTPBasicAuth, board_id: int, states: Op
 
 
 def main() -> int:
-    maybe_load_dotenv()
     domain = required_env("JIRA_DOMAIN").rstrip("/")
     email = required_env("JIRA_EMAIL")
     token = required_env("JIRA_API_TOKEN")

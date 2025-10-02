@@ -7,10 +7,15 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 try:
+    from prototype.local_cli.lib.env_loader import ensure_env_loaded
     from prototype.local_cli.lib.jira_client import JiraClient  # type: ignore
-except ModuleNotFoundError:
+except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
     sys.path.append(str(Path(__file__).resolve().parents[1]))
+    from env_loader import ensure_env_loaded  # type: ignore
     from lib.jira_client import JiraClient  # type: ignore
+
+
+ensure_env_loaded()
 
 
 def calc_velocity_for_sprint(jc: 'JiraClient', sprint_id: int, sp_field: str) -> Dict[str, Any]:

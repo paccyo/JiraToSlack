@@ -1,6 +1,10 @@
 import os
 from jira import JIRA
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 class RequestJqlRepository:
     def __init__(self):
         # 環境変数の読み込み

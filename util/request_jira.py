@@ -2,6 +2,10 @@ import os
 from jira import JIRA, JIRAError
 from datetime import datetime
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 class RequestJiraRepository:
     def __init__(self):
         # 環境変数の読み込み

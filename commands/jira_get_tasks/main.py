@@ -5,11 +5,15 @@ from commands.jira_get_tasks.prompts import get_system_prompt_generate_jql, JQLQ
 from util.request_jira import RequestJiraRepository
 
 import os
+import sys
 import json
 import re
-
 from google import genai
 from google.genai import types
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class CommandJiraGetTasksRepository:
     
@@ -69,9 +73,7 @@ class CommandJiraGetTasksRepository:
         
 
 if __name__ == "__main__":
-    from dotenv import load_dotenv
-
-    load_dotenv()
+    ensure_env_loaded()
     query = "今日の13:00から14:00の間に完了したタスク"
     repository = CommandJiraGetTasksRepository()
     print(f"resuest query:{query}")
