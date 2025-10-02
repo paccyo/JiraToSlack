@@ -29,7 +29,7 @@ def register_actions(app):
     def handle_move_todo_command(ack, body, say):
         ack()
         try:
-            asyncio.run(change_status(say, body["user"]["id"], body["actions"][0]["value"], "To Do"))
+            change_status(say, body["user"]["id"], body["actions"][0]["value"], "To Do")
             say(f"✅ Jira課題 `{body['actions'][0]['value']}` のステータスをTo Doに変更しました。")
         except Exception as e:
             print(f"エラーが発生しました: {e}")
@@ -41,7 +41,7 @@ def register_actions(app):
     def handle_move_in_progress_command(ack, body, say):
         ack()
         try:
-            asyncio.run(change_status(say, body["user"]["id"], body["actions"][0]["value"], "In Progress"))
+            change_status(say, body["user"]["id"], body["actions"][0]["value"], "In Progress")
             say(f"✅ Jira課題 `{body['actions'][0]['value']}` のステータスをIn Progressに変更しました。")
         except Exception as e:
             print(f"エラーが発生しました: {e}")
@@ -52,7 +52,7 @@ def register_actions(app):
     def handle_move_abort_command(ack, body, say):
         ack()
         try:
-            asyncio.run(change_status(say, body["user"]["id"], body["actions"][0]["value"], "Abort"))
+            change_status(say, body["user"]["id"], body["actions"][0]["value"], "Abort")
         except Exception as e:
             print(f"エラーが発生しました: {e}")
             say(f"エラーが発生しました: {e}")
@@ -63,7 +63,7 @@ def register_actions(app):
     def handle_move_compleated_command(ack, body, say):
         ack()
         try:
-            asyncio.run(change_status(say, body["user"]["id"], body["actions"][0]["value"], "完了"))
+            change_status(say, body["user"]["id"], body["actions"][0]["value"], "完了")
         except Exception as e:
             print(f"エラーが発生しました: {e}")
             say(f"エラーが発生しました: {e}")
