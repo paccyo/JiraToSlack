@@ -176,53 +176,43 @@ class RequestJqlRepository:
                         "type": "button",
                         "text": {
                             "type": "plain_text",
-                            "text": "ToDo",
+                            "text": "Click Me",
                             "emoji": True
                         },
-                        "value": issue,
+                        "value": "click_me_123",
                         "action_id": "move_Todo"
                     },
                     {
                         "type": "button",
                         "text": {
                             "type": "plain_text",
-                            "text": "進行中",
+                            "text": "Click Me",
                             "emoji": True
                         },
-                        "value": issue,
-                        "action_id": "move_in_pending"
+                        "value": "click_me_123",
+                        "action_id": "move_in_progress"
                     },
                     {
                         "type": "button",
                         "text": {
                             "type": "plain_text",
-                            "text": "レビュー中",
+                            "text": "Click Me",
                             "emoji": True
                         },
-                        "value": issue,
-                        "action_id": "move_reviewing"
-                    },
-                    {
-                        "type": "button",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "Abort",
-                            "emoji": True
-                        },
-                        "value": issue,
+                        "value": "click_me_123",
                         "action_id": "move_abort"
                     },
                     {
                         "type": "button",
                         "text": {
                             "type": "plain_text",
-                            "text": "完了",
+                            "text": "Click Me",
                             "emoji": True
                         },
-                        "value": issue,
-                        "action_id": "move_completed"
+                        "value": "click_me_123",
+                        "action_id": "move_compleated"
                     }
                 ]
-            },
+            }
         ]
         return blocks

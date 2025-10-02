@@ -9,6 +9,7 @@ from slack_bolt.adapter.google_cloud_functions import SlackRequestHandler
 from dotenv import load_dotenv
 from google.cloud import firestore
 import commands
+import actions
 from sheduler.main import SchedulerTaskHandler
 
 # --- 環境変数の読み込みとチェック ---
@@ -31,6 +32,7 @@ app = App(
 )
 db = firestore.Client()
 commands.register_commands(app)
+actions.register_actions(app)
 slack_handler = SlackRequestHandler(app)
 
 
