@@ -1,8 +1,8 @@
 import os
-from jira import JIRA
+from jira import JIRA, JIRAError
 from datetime import datetime
 
-class RequestJqlRepository:
+class RequestJiraRepository:
     def __init__(self):
         # 環境変数の読み込み
         JIRA_SERVER = os.getenv("JIRA_DOMAIN")
@@ -23,7 +23,7 @@ class RequestJqlRepository:
             return None
 
 
-    def execute(self, query, max_results=False):
+    def request_jql(self, query, max_results=False):
         print(f"request jql query: \n{query}")
         try:
             # JQLを実行して課題を検索
@@ -176,43 +176,70 @@ class RequestJqlRepository:
                         "type": "button",
                         "text": {
                             "type": "plain_text",
-                            "text": "Click Me",
+                            "text": "ToDo",
                             "emoji": True
                         },
-                        "value": "click_me_123",
+                        "value": issue.key,
                         "action_id": "move_Todo"
                     },
                     {
                         "type": "button",
                         "text": {
                             "type": "plain_text",
-                            "text": "Click Me",
+                            "text": "In_progress",
                             "emoji": True
                         },
-                        "value": "click_me_123",
+                        "value": issue.key,
                         "action_id": "move_in_progress"
                     },
                     {
                         "type": "button",
                         "text": {
                             "type": "plain_text",
-                            "text": "Click Me",
+                            "text": "Abort",
                             "emoji": True
                         },
-                        "value": "click_me_123",
+                        "value": issue.key,
                         "action_id": "move_abort"
                     },
                     {
                         "type": "button",
                         "text": {
                             "type": "plain_text",
-                            "text": "Click Me",
+                            "text": "完了",
                             "emoji": True
                         },
-                        "value": "click_me_123",
+                        "value": issue.key,
                         "action_id": "move_compleated"
                     }
                 ]
             }
         ]
         return blocks
+    
+    def issue_change_status(self, user_email, issue_key, status):
+        """Jira課題を完了ステータスに移動させる関数（バックグラウンドで実行）"""
+        print(f"Starting Jira completion process for issue: {issue_key} by user {user_email}")
+        done_status_names = ["完了", "done", "closed", "解決済み"]
+
+        try:
+            transitions = self.jira_client.transitions(issue_key)
+            
+            transition_id = None
+            for t in transitions:
+                if t['to']['name'].lower() in done_status_names:
+                    transition_id = t['id']
+                    break
+            
+            if transition_id:
+                self.jira_client.transition_issue(issue_key, transition_id)
+                print(f"✅ Successfully transitioned issue {issue_key}")
+                # ここでユーザーにDMを送るなどの成功通知も可能
+                # app.client.chat_postMessage(channel=user_id, text=f"Jira課題 `{issue_key}` を完了にしました。")
+            else:
+                print(f"⚠️ Could not find a 'Done' transition for issue {issue_key}")
+
+        except JIRAError as e:
+            print(f"❌ Jira API Error for issue {issue_key}: Status {e.status_code} - {e.text}")
+        except Exception as e:
+            print(f"❌ An unexpected error occurred: {e}")
