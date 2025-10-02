@@ -29,34 +29,50 @@ def register_actions(app):
     def handle_move_todo_command(ack, body, say):
         ack()
         try:
-            change_status(say, body["user"]["id"], body["actions"][0]["value"], "To Do")
-            say(f"✅ Jira課題 `{body['actions'][0]['value']}` のステータスをTo Doに変更しました。")
+            change_status(say, body["user"]["id"], body["actions"][0]["value"], "TODO")
+            say(f"✅ Jira課題 `{body['actions'][0]['value']}` のステータスをTODOに変更しました。")
+            return
         except Exception as e:
             print(f"エラーが発生しました: {e}")
             say(f"エラーが発生しました: {e}")
-        return 
+            return 
         
 
     @app.action("move_in_progress")
     def handle_move_in_progress_command(ack, body, say):
         ack()
         try:
-            change_status(say, body["user"]["id"], body["actions"][0]["value"], "In Progress")
-            say(f"✅ Jira課題 `{body['actions'][0]['value']}` のステータスをIn Progressに変更しました。")
+            change_status(say, body["user"]["id"], body["actions"][0]["value"], "IN_progress")
+            say(f"✅ Jira課題 `{body['actions'][0]['value']}` のステータスをIN_progressに変更しました。")
+            return 
         except Exception as e:
             print(f"エラーが発生しました: {e}")
             say(f"エラーが発生しました: {e}")
-        return
+            return
+        
+    @app.action("move_reviewing")
+    def handle_move_in_progress_command(ack, body, say):
+        ack()
+        try:
+            change_status(say, body["user"]["id"], body["actions"][0]["value"], "REVIEWING")
+            say(f"✅ Jira課題 `{body['actions'][0]['value']}` のステータスをREVIEWINGに変更しました。")
+            return 
+        except Exception as e:
+            print(f"エラーが発生しました: {e}")
+            say(f"エラーが発生しました: {e}")
+            return
 
     @app.action("move_abort")
     def handle_move_abort_command(ack, body, say):
         ack()
         try:
             change_status(say, body["user"]["id"], body["actions"][0]["value"], "Abort")
+            say(f"✅ Jira課題 `{body['actions'][0]['value']}` のステータスをAbortに変更しました。")
+            return
         except Exception as e:
             print(f"エラーが発生しました: {e}")
             say(f"エラーが発生しました: {e}")
-        return
+            return
 
 
     @app.action("move_compleated")
@@ -64,7 +80,9 @@ def register_actions(app):
         ack()
         try:
             change_status(say, body["user"]["id"], body["actions"][0]["value"], "完了")
+            say(f"✅ Jira課題 `{body['actions'][0]['value']}` を完了にしました。")
+            return
         except Exception as e:
             print(f"エラーが発生しました: {e}")
             say(f"エラーが発生しました: {e}")
-        return
+            return

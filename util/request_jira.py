@@ -201,6 +201,16 @@ class RequestJiraRepository:
                         "type": "button",
                         "text": {
                             "type": "plain_text",
+                            "text": "REVIEWING",
+                            "emoji": True
+                        },
+                        "value": issue.key,
+                        "action_id": "move_reviewing"
+                    },
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
                             "text": "Abort",
                             "emoji": True
                         },
