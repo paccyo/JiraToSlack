@@ -73,7 +73,6 @@ class CommandJiraGetTasksRepository:
         
 
 if __name__ == "__main__":
-    ensure_env_loaded()
     query = "今日の13:00から14:00の間に完了したタスク"
     repository = CommandJiraGetTasksRepository()
     print(f"resuest query:{query}")
