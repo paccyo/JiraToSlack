@@ -33,7 +33,7 @@ def register_commands(app):
             jira_email_to_regester = None
             if text:
                 # テキストが提供されていれば、それをメールアドレスとして使用
-                jira_email_to_regester = None
+                jira_email_to_regester = text
             else:
                 # テキストがなければ、Slackmのメールアドレスを使用
                 jira_email_to_regester = slack_email_to_register 
