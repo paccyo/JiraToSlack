@@ -24,6 +24,8 @@ def register_commands(app):
         user_name = body["user_name"]
         text = body.get("text", "").strip()
 
+        # Slackプロフィールのメールアドレスを取得
+        user_info = client.users_info(user=user_id)
         # Slackプロフィールからメールアドレスを取得
         slack_email_to_register = user_info["user"]["profile"]["email"]
         
@@ -33,8 +35,9 @@ def register_commands(app):
                 # テキストが提供されていれば、それをメールアドレスとして使用
                 jira_email_to_regester = None
             else:
-                # テキストがなければ、Slackプロフィールのメールアドレスを取得
-                user_info = client.users_info(user=user_id)
+                # テキストがなければ、Slackmのメールアドレスを使用
+                jira_email_to_regester = slack_email_to_register 
+                
 
             # Firestoreに保存
             command_add_user_repository = CommandAddUserResponce()
