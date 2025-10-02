@@ -4,15 +4,21 @@ import os
 import sys
 import base64
 import json
+from pathlib import Path
 from slack_bolt import App
 from slack_bolt.adapter.google_cloud_functions import SlackRequestHandler
-from dotenv import load_dotenv
 from google.cloud import firestore
 import commands
 from sheduler.main import SchedulerTaskHandler
 
+try:
+    from prototype.local_cli.lib.env_loader import ensure_env_loaded
+except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
+    sys.path.append(str(Path(__file__).resolve().parents[1] / "prototype" / "local_cli"))
+    from env_loader import ensure_env_loaded  # type: ignore
+
 # --- 環境変数の読み込みとチェック ---
-load_dotenv()
+ensure_env_loaded()
 slack_bot_token = os.environ.get("SLACK_BOT_TOKEN")
 slack_signing_secret = os.environ.get("SLACK_SIGNING_SECRET")
 

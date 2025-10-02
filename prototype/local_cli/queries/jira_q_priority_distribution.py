@@ -6,8 +6,16 @@ from typing import Any, Dict, List
 from pathlib import Path
 
 # Allow local imports
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-from lib.jira_client import JiraClient  # type: ignore
+try:
+    from prototype.local_cli.lib.env_loader import ensure_env_loaded
+    from prototype.local_cli.lib.jira_client import JiraClient  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
+    from env_loader import ensure_env_loaded  # type: ignore
+    from lib.jira_client import JiraClient  # type: ignore
+
+
+ensure_env_loaded()
 
 
 def main() -> int:

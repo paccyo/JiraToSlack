@@ -1,14 +1,22 @@
-
 import os
 import subprocess
 import sys
 from pathlib import Path
 
+try:
+    from prototype.local_cli.lib.env_loader import ensure_env_loaded, build_process_env
+except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
+    sys.path.append(str(Path(__file__).resolve().parents[1] / "prototype" / "local_cli"))
+    from env_loader import ensure_env_loaded, build_process_env  # type: ignore
+
+
+ensure_env_loaded()
+
 def run_dashboard_and_get_image():
     # ダッシュボード生成スクリプトを実行
     try:
         repo_root = Path(__file__).resolve().parents[2]
-        base_env = os.environ.copy()
+        base_env = build_process_env()
         search_paths = [str(repo_root), str(repo_root / "prototype"), str(repo_root / "prototype" / "local_cli")]
         existing_py_path = base_env.get("PYTHONPATH")
         base_env["PYTHONPATH"] = os.pathsep.join(

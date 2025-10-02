@@ -11,6 +11,7 @@ from requests.auth import HTTPBasicAuth
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+from prototype.local_cli.lib.env_loader import ensure_env_loaded, build_process_env
 from prototype.local_cli.lib.board_selector import resolve_board_with_preferences
 try:
     import google.generativeai as genai  # type: ignore
@@ -29,31 +30,7 @@ AI_OVERLAY_IN_IMAGE = True
 AI_OVERLAY_MAX_LINES = 18
 
 
-def maybe_load_dotenv() -> None:
-    try:
-        from dotenv import load_dotenv  # type: ignore
-    except Exception:
-        return
-    script_dir = Path(__file__).resolve().parent
-    # Prefer prototype/local_cli/.env, then queries/.env, then CWD, then repo root
-    candidates = [
-        script_dir / ".env",                          # .../prototype/local_cli/.env
-        (script_dir / "queries" / ".env"),           # .../prototype/local_cli/queries/.env
-        Path.cwd() / ".env",                          # current working dir
-        Path(__file__).resolve().parents[2] / ".env",  # repo root (best-effort)
-    ]
-    # --- 以下はダッシュボード画像生成・各種集計・ファイル出力の主要処理 ---
-    # 各関数・内部処理の目的や流れを日本語コメントで詳細に記述しています。
-
-    for p in candidates:
-        try:
-            if p.exists():
-                load_dotenv(p, override=False)
-                if os.getenv("DASHBOARD_LOG", "1").lower() in ("1", "true", "yes"):
-                    print(f"[env] loaded: {p}")
-        except Exception:
-            pass
-
+ensure_env_loaded()
 
 def _sanitize_api_key(raw: Optional[str]) -> Optional[str]:
     if not raw:
@@ -134,10 +111,10 @@ def get_json_from_script(script_path: str, env_extra: Optional[Dict[str, str]] =
     print(f"[DEBUG] CWD: {os.getcwd()}")
     print(f"[DEBUG] ENV: JIRA_DOMAIN={os.environ.get('JIRA_DOMAIN')}, JIRA_EMAIL={os.environ.get('JIRA_EMAIL')}, JIRA_API_TOKEN={os.environ.get('JIRA_API_TOKEN')}")
     try:
-        env = os.environ.copy()
+        env = build_process_env()
         if env_extra:
-        # .envファイルを複数パスから読み込む。Jira認証や各種設定値を環境変数としてセット。
-        # ログ出力が有効な場合は読み込んだ.envパスを表示。
+            # .envファイルを複数パスから読み込む。Jira認証や各種設定値を環境変数としてセット。
+            # ログ出力が有効な場合は読み込んだ.envパスを表示。
             env.update(env_extra)
         env["OUTPUT_JSON"] = "1"
         env["PYTHONUTF8"] = "1"
@@ -181,7 +158,7 @@ def get_json_from_script(script_path: str, env_extra: Optional[Dict[str, str]] =
 
 
 def get_json_from_script_args(script_path: str, args: List[str], env_extra: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-    env = os.environ.copy()
+    env = build_process_env()
     # Google APIキーの正規化。不要な記号やコメントを除去し、'AIza'以降の有効部分のみ抽出。
     if env_extra:
         env.update(env_extra)
@@ -2035,7 +2012,7 @@ def draw_png(
 
 
 def main() -> int:
-    maybe_load_dotenv()
+    ensure_env_loaded()
     JIRA_DOMAIN = os.getenv("JIRA_DOMAIN", "").rstrip("/")
     email = os.getenv("JIRA_EMAIL")
     api_token = os.getenv("JIRA_API_TOKEN")

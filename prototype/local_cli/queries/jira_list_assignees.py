@@ -8,8 +8,15 @@ import os
 import sys
 import argparse
 from typing import Set, List, Dict, Any
-from dotenv import load_dotenv
+from pathlib import Path
 from requests.auth import HTTPBasicAuth
+
+try:
+    from prototype.local_cli.lib.env_loader import ensure_env_loaded
+except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
+    from env_loader import ensure_env_loaded  # type: ignore
+ensure_env_loaded()
 # --- libディレクトリの絶対パスをsys.pathに追加（Pylanceのimportエラー対策） ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
 lib_dir = os.path.abspath(os.path.join(current_dir, '..', 'lib'))
@@ -23,7 +30,6 @@ def main() -> int:
     parser.add_argument("--project", help="Project key when scope=project")
     args = parser.parse_args()
 
-    load_dotenv()
     jc = JiraClient()
 
     # スコープ判定

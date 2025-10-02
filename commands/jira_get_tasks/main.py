@@ -5,8 +5,18 @@ from commands.jira_get_tasks.prompts import get_system_prompt_generate_jql, JQLQ
 from util.request_jql import RequestJqlRepository
 
 import os
+import sys
 import json
 import re
+from pathlib import Path
+
+try:
+    from prototype.local_cli.lib.env_loader import ensure_env_loaded
+except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
+    sys.path.append(str(Path(__file__).resolve().parents[2] / "prototype" / "local_cli"))
+    from env_loader import ensure_env_loaded  # type: ignore
+
+ensure_env_loaded()
 
 from google import genai
 from google.genai import types
@@ -69,9 +79,7 @@ class CommandJiraGetTasksRepository:
         
 
 if __name__ == "__main__":
-    from dotenv import load_dotenv
-
-    load_dotenv()
+    ensure_env_loaded()
     query = "今日の13:00から14:00の間に完了したタスク"
     repository = CommandJiraGetTasksRepository()
     print(f"resuest query:{query}")

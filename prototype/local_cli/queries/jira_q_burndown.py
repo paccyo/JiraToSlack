@@ -7,11 +7,16 @@ from pathlib import Path
 
 # Use fully qualified import so tests can monkeypatch consistently
 try:
+    from prototype.local_cli.lib.env_loader import ensure_env_loaded
     from prototype.local_cli.lib.jira_client import JiraClient  # type: ignore
-except ModuleNotFoundError:
+except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
     # When executed as a script by path, ensure parent is on sys.path
     sys.path.append(str(Path(__file__).resolve().parents[1]))
+    from env_loader import ensure_env_loaded  # type: ignore
     from lib.jira_client import JiraClient  # type: ignore
+
+
+ensure_env_loaded()
 
 JST = timezone(timedelta(hours=9))
 DEFAULT_BURNDOWN_UNIT = "issues"

@@ -7,6 +7,15 @@ import requests
 from requests.auth import HTTPBasicAuth
 from pathlib import Path
 
+try:
+    from prototype.local_cli.lib.env_loader import ensure_env_loaded
+except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
+    from env_loader import ensure_env_loaded  # type: ignore
+
+
+ensure_env_loaded()
+
 
 def required_env(key: str) -> str:
     v = os.getenv(key)
@@ -14,40 +23,7 @@ def required_env(key: str) -> str:
         print(f"環境変数が未設定です: {key}", file=sys.stderr)
         sys.exit(2)
     return v
-
-
-def maybe_load_dotenv() -> None:
-    """Load .env with priority to prototype/local_cli/.env.
-
-    Search order:
-    1) prototype/local_cli/.env
-    2) prototype/local_cli/queries/.env
-    3) current working directory .env
-    4) repository root .env (best-effort)
-    """
-    try:
-        from dotenv import load_dotenv  # type: ignore
-    except Exception:
-        return
-
-    script_dir = Path(__file__).resolve().parent
-    candidates = [
-        script_dir.parent / ".env",  # .../prototype/local_cli/.env
-        script_dir / ".env",          # .../prototype/local_cli/queries/.env
-        Path.cwd() / ".env",          # current working dir
-        Path(__file__).resolve().parents[2] / ".env",  # repo root (best-effort)
-    ]
-    for p in candidates:
-        try:
-            if p.exists():
-                load_dotenv(p, override=False)
-        except Exception:
-            # ignore individual load failures and continue
-            pass
-
-
 def main() -> int:
-    maybe_load_dotenv()
     domain = required_env("JIRA_DOMAIN").rstrip("/")
     email = required_env("JIRA_EMAIL")
     token = required_env("JIRA_API_TOKEN")

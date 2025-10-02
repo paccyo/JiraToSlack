@@ -1,6 +1,17 @@
 import os
+import sys
+from pathlib import Path
 from jira import JIRA
 from datetime import datetime
+
+try:
+    from prototype.local_cli.lib.env_loader import ensure_env_loaded
+except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
+    sys.path.append(str(Path(__file__).resolve().parents[1] / "prototype" / "local_cli"))
+    from env_loader import ensure_env_loaded  # type: ignore
+
+
+ensure_env_loaded()
 
 class RequestJqlRepository:
     def __init__(self):
