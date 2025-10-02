@@ -1,5 +1,4 @@
 # sheduler/main.py
-import os
 import sys
 from datetime import datetime, date
 
@@ -14,7 +13,7 @@ class SchedulerTaskHandler:
         
         try:
             # JQLリクエストリポジトリのインスタンス化
-            request_jql_repository = RequestJqlRepository()
+            request_jira_repository = RequestJiraRepository()
         except Exception as e:
             return f"Initilized JQLRepository error:{e}"
 
@@ -38,13 +37,10 @@ class SchedulerTaskHandler:
                     user_id = user_info_response["user"]["id"]
                     
                     # JQLクエリを構築
-                    project_key = os.getenv("JIRA_PROJECT_KEY")
                     jql_query = f'assignee = "{user_email}" AND status in ("To Do", "IN_progress")'
-                    if project_key:
-                        jql_query = f'project = "{project_key}" AND {jql_query}'
                     
                     # JQLを実行してJiraからタスクを取得
-                    jira_results = request_jql_repository.execute(jql_query)
+                    jira_results = request_jira_repository.request_jql(jql_query)
                     print(f"Jiraから {len(jira_results) if jira_results else 0} 件のタスクを取得しました。") # デバッグ用ログ
 
                     blocks = []
@@ -59,7 +55,7 @@ class SchedulerTaskHandler:
                         if tasks_due_today:
                             found_any_tasks = True
                             for issue in tasks_due_today:
-                                blocks.extend(request_jql_repository.format_jira_issue_for_slack(issue))
+                                blocks.extend(request_jira_repository.format_jira_issue_for_slack(issue))
                         else:
                             blocks.append({
                                 "type": "section",
@@ -85,7 +81,7 @@ class SchedulerTaskHandler:
                             found_any_tasks = True
                             blocks.append({"type": "header", "text": {"type": "plain_text", "text": "優先度の高いタスク"}})
                             for issue in high_priority_tasks:
-                                blocks.extend(request_jql_repository.format_jira_issue_for_slack(issue))
+                                blocks.extend(request_jira_repository.format_jira_issue_for_slack(issue))
 
                         # カテゴリ3: 期日が近いタスク
                         tasks_with_duedate = [issue for issue in remaining_tasks if issue.fields.duedate]
@@ -97,7 +93,7 @@ class SchedulerTaskHandler:
                             found_any_tasks = True
                             blocks.append({"type": "header", "text": {"type": "plain_text", "text": "期日が近いタスク"}})
                             for issue in upcoming_tasks:
-                                blocks.extend(request_jql_repository.format_jira_issue_for_slack(issue))
+                                blocks.extend(request_jira_repository.format_jira_issue_for_slack(issue))
 
                     if not found_any_tasks:
                         # jiraからタスクが取れなかった場合は、総合的な「タスクなし」メッセージに差し替える
