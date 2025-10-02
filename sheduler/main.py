@@ -51,11 +51,19 @@ class SchedulerTaskHandler:
 
                         # カテゴリ1: 今日が期限のタスク
                         tasks_due_today = [issue for issue in jira_results if issue.fields.duedate and issue.fields.duedate == today]
+                        blocks.append({"type": "header", "text": {"type": "plain_text", "text": "今日が期限のタスク"}})
                         if tasks_due_today:
                             found_any_tasks = True
-                            blocks.append({"type": "header", "text": {"type": "plain_text", "text": "今日が期限のタスク"}})
                             for issue in tasks_due_today:
                                 blocks.extend(request_jql_repository.format_jira_issue_for_slack(issue))
+                        else:
+                            blocks.append({
+                                "type": "section",
+                                "text": {
+                                    "type": "mrkdwn",
+                                    "text": "今日が期限のタスクはありません。"
+                                }
+                            })
 
                         # 残りのタスク（今日が期限のものを除く）
                         remaining_tasks = [issue for issue in jira_results if not (issue.fields.duedate and issue.fields.duedate == today)]
@@ -88,13 +96,15 @@ class SchedulerTaskHandler:
                                 blocks.extend(request_jql_repository.format_jira_issue_for_slack(issue))
 
                     if not found_any_tasks:
-                        blocks.append({
-                            "type": "section",
-                            "text": {
-                                "type": "mrkdwn",
-                                "text": "現在、ToDoまたは進行中のタスクはありません。"
-                            }
-                        })
+                        # jiraからタスクが取れなかった場合は、総合的な「タスクなし」メッセージに差し替える
+                        if not jira_results:
+                            blocks = [{
+                                "type": "section",
+                                "text": {
+                                    "type": "mrkdwn",
+                                    "text": "現在、ToDoまたは進行中のタスクはありません。"
+                                }
+                            }]
 
                     # 取得したユーザーIDを 'channel' に指定してDMを送信
                     app.client.chat_postMessage(
