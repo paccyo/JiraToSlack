@@ -30,7 +30,7 @@ def register_actions(app):
         ack()
         try:
             asyncio.run(change_status(say, body["user"]["id"], body["actions"][0]["value"], "To Do"))
-            say(f"✅ Jira課題 `{body['actions'][0]['value']}` のステータスをTo Doに変更しました。"))
+            say(f"✅ Jira課題 `{body['actions'][0]['value']}` のステータスをTo Doに変更しました。")
         except Exception as e:
             print(f"エラーが発生しました: {e}")
             say(f"エラーが発生しました: {e}")
