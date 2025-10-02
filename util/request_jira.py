@@ -8,6 +8,7 @@ class RequestJiraRepository:
         JIRA_SERVER = os.getenv("JIRA_DOMAIN")
         JIRA_EMAIL = os.getenv("JIRA_EMAIL")
         JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN")
+        self.project_key = os.getenv("JIRA_PROJECT_KEY")
         try:
             # メールアドレスとAPIトークンで認証し、Jiraに接続
             self.jira_client = JIRA(
@@ -36,7 +37,11 @@ class RequestJiraRepository:
     
     def build_jql_from_json(self, data: dict) -> str:
 
-        conditions = []
+        
+        if self.project_key:
+            conditions = [f'project = "{self.project_key}"']
+        else:
+            conditions = []
 
         # JQL内で引用符で囲む必要のない特別なキーワードや関数を定義
         jql_keywords = {
