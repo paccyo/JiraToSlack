@@ -11,8 +11,16 @@ from requests.auth import HTTPBasicAuth
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
-from prototype.local_cli.lib.env_loader import ensure_env_loaded, build_process_env
-from prototype.local_cli.lib.board_selector import resolve_board_with_preferences
+
+try:
+    from prototype.local_cli.lib.env_loader import ensure_env_loaded, build_process_env
+    from prototype.local_cli.lib.board_selector import resolve_board_with_preferences
+except ModuleNotFoundError:  # pragma: no cover - fallback when package import fails
+    alt_lib_dir = Path(__file__).resolve().parent / "lib"
+    if str(alt_lib_dir) not in sys.path:
+        sys.path.insert(0, str(alt_lib_dir))
+    from env_loader import ensure_env_loaded, build_process_env  # type: ignore
+    from board_selector import resolve_board_with_preferences  # type: ignore
 try:
     import google.generativeai as genai  # type: ignore
     from google.generativeai import types
