@@ -24,19 +24,21 @@ def register_commands(app):
         user_name = body["user_name"]
         text = body.get("text", "").strip()
 
+        # Slackプロフィールからメールアドレスを取得
+        slack_email_to_register = user_info["user"]["profile"]["email"]
+        
         try:
-            email_to_register = ""
+            jira_email_to_regester = None
             if text:
                 # テキストが提供されていれば、それをメールアドレスとして使用
-                email_to_register = text
+                jira_email_to_regester = None
             else:
                 # テキストがなければ、Slackプロフィールのメールアドレスを取得
                 user_info = client.users_info(user=user_id)
-                email_to_register = user_info["user"]["profile"]["email"]
 
             # Firestoreに保存
             command_add_user_repository = CommandAddUserResponce()
-            response = command_add_user_repository.execute(user_id, user_name, email_to_register)
+            response = command_add_user_repository.execute(user_id, user_name, slack_email_to_register, jira_email_to_regester)
             say(response)
         except Exception as e:
             say(f"エラーが発生しました: {e}")          
