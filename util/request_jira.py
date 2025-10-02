@@ -231,28 +231,31 @@ class RequestJiraRepository:
             }
         ]
         return blocks
-    
-    def issue_change_status(self, user_email, issue_key, status):
-        """Jira課題を完了ステータスに移動させる関数（バックグラウンドで実行）"""
-        print(f"Starting Jira completion process for issue: {issue_key} by user {user_email}")
-        done_status_names = ["完了", "done", "closed", "解決済み"]
 
+    def issue_change_status(self, user_email, issue_key, status):
+        """Jira課題を指定されたステータスに移動させる関数"""
+        print(f"DEBUG: issue_change_status called. issue='{issue_key}', status='{status}', user='{user_email}'")
+        
         try:
             transitions = self.jira_client.transitions(issue_key)
             
             transition_id = None
             for t in transitions:
-                if t['to']['name'].lower() in done_status_names:
+                # --- ↓↓↓ ここを修正 ↓↓↓ ---
+                # 渡されたstatus引数と移動先のステータス名を比較する
+                # .lower()で両方を小文字にすると、大文字/小文字の違いを吸収できて安全
+                if t['to']['name'].lower() == status.lower():
                     transition_id = t['id']
-                    break
+                    break # 一致するものが見つかったらループを抜ける
             
             if transition_id:
                 self.jira_client.transition_issue(issue_key, transition_id)
-                print(f"✅ Successfully transitioned issue {issue_key}")
-                # ここでユーザーにDMを送るなどの成功通知も可能
-                # app.client.chat_postMessage(channel=user_id, text=f"Jira課題 `{issue_key}` を完了にしました。")
+                print(f"✅ Successfully transitioned issue {issue_key} to '{status}'")
             else:
-                print(f"⚠️ Could not find a 'Done' transition for issue {issue_key}")
+                # 目的のステータスへのトランジションが見つからなかった場合のログ
+                available_transitions = [t['to']['name'] for t in transitions]
+                print(f"⚠️ Could not find a transition to '{status}' for issue {issue_key}.")
+                print(f"   Available transitions are: {available_transitions}")
 
         except JIRAError as e:
             print(f"❌ Jira API Error for issue {issue_key}: Status {e.status_code} - {e.text}")
