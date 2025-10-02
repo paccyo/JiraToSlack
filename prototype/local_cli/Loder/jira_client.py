@@ -9,10 +9,14 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 try:
-    from .env_loader import ensure_env_loaded
+    from .dotenv_loader import ensure_env_loaded
 except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
-    sys.path.append(str(Path(__file__).resolve().parents[1]))
-    from env_loader import ensure_env_loaded  # type: ignore
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "prototype").exists():
+            sys.path.append(str(parent))
+            break
+    from prototype.local_cli.Loder.dotenv_loader import ensure_env_loaded  # type: ignore
 
 from .board_selector import resolve_board_with_preferences
 
