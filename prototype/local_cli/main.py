@@ -1,9 +1,11 @@
+import importlib
 import os
 import sys
 import json
+import stat
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 from PIL import Image, ImageDraw, ImageFont
 import requests
 from requests.auth import HTTPBasicAuth
@@ -39,6 +41,95 @@ AI_OVERLAY_MAX_LINES = 18
 
 
 ensure_env_loaded()
+
+
+def _log_deployment_diagnostics() -> None:
+    """Emit detailed diagnostics so Cloud Run / container logs capture environment state."""
+
+    def _safe_print(header: str, lines: Iterable[str]) -> None:
+        print(header)
+        for line in lines:
+            print(line)
+
+    def _list_dir(path: Path, limit: int = 60) -> List[str]:
+        rows: List[str] = []
+        try:
+            entries = sorted(path.iterdir(), key=lambda p: p.name)
+        except FileNotFoundError:
+            return ["(not found)"]
+        except PermissionError:
+            return ["(permission denied)"]
+        except Exception as exc:  # pragma: no cover - defensive
+            return [f"(failed to list: {exc})"]
+        for idx, entry in enumerate(entries):
+            if idx >= limit:
+                rows.append(f"... ({len(entries) - limit} more entries omitted)")
+                break
+            try:
+                info = entry.stat()
+                mode = stat.filemode(info.st_mode)
+                size = info.st_size
+            except Exception:
+                mode = "??????????"
+                size = 0
+            rows.append(f"{mode} {size:>10} {entry.name}")
+        if not rows:
+            rows.append("(empty directory)")
+        return rows
+
+    def _dump_file(path: Path, max_bytes: int = 2000) -> List[str]:
+        try:
+            data = path.read_text(encoding="utf-8", errors="replace")
+        except FileNotFoundError:
+            return ["(file not found)"]
+        except PermissionError:
+            return ["(permission denied)"]
+        except Exception as exc:  # pragma: no cover - defensive
+            return [f"(failed to read: {exc})"]
+        if len(data) > max_bytes:
+            snippet = data[:max_bytes] + "\n... (truncated)"
+        else:
+            snippet = data
+        return snippet.splitlines() or ["(file is empty)"]
+
+    def _log_sys_path() -> None:
+        print("$ python -c 'import os,sys; ...' (captured via runtime)")
+        print(f"cwd = {os.getcwd()}")
+        print("--- sys.path ---")
+        for entry in sys.path:
+            print(entry)
+
+    def _log_import(name: str) -> None:
+        print(f"$ python -c 'import {name}' (captured via runtime)")
+        try:
+            module = importlib.import_module(name)
+            location = getattr(module, "__file__", None) or "(namespace package)"
+            print(f"import succeeded: {name} -> {location}")
+        except Exception as exc:  # pragma: no cover - import diagnostics only
+            print(f"import failed: {name} -> {exc}")
+
+    print("=== deployment diagnostics: start ===")
+
+    candidate_roots = [Path(p) for p in ("/workspace", "/app", str(REPO_ROOT))]
+    for root in candidate_roots:
+        _safe_print(f"$ ls -la {root}", _list_dir(root))
+        _safe_print(f"$ ls -la {root / 'prototype'}", _list_dir(root / "prototype"))
+        _safe_print(f"$ ls -la {root / 'prototype' / 'local_cli'}", _list_dir(root / "prototype" / "local_cli"))
+
+    target_file = Path("/workspace/prototype/local_cli/__init__.py")
+    if not target_file.exists():
+        target_file = REPO_ROOT / "prototype" / "local_cli" / "__init__.py"
+    _safe_print(f"$ cat {target_file}", _dump_file(target_file))
+
+    _log_sys_path()
+    _log_import("prototype")
+    _log_import("prototype.local_cli")
+    _log_import("prototype.local_cli.lib")
+
+    print("=== deployment diagnostics: end ===")
+
+
+_log_deployment_diagnostics()
 
 def _sanitize_api_key(raw: Optional[str]) -> Optional[str]:
     if not raw:
