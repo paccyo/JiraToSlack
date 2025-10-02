@@ -1,8 +1,8 @@
 # from prompts import get_system_prompt_generate_jql, JQLQuerySchema
-# from request_jql import RequestJqlRepository
+# from request_jql import RequestJiraRepository
 
 from commands.jira_get_tasks.prompts import get_system_prompt_generate_jql, JQLQuerySchema
-from util.request_jql import RequestJqlRepository
+from util.request_jira import RequestJiraRepository
 
 import os
 import json
@@ -44,15 +44,15 @@ class CommandJiraGetTasksRepository:
             # return responce_result
             try:
                 # JQLリクエスト
-                request_jql_repository = RequestJqlRepository()
-                jql_query = request_jql_repository.build_jql_from_json(gemini_result)
+                request_jira_repository = RequestJiraRepository()
+                jql_query = request_jira_repository.build_jql_from_json(gemini_result)
                 limit = gemini_result.get("limit")
-                jira_results = request_jql_repository.execute(jql_query, max_results=limit)
+                jira_results = request_jira_repository.execute(jql_query, max_results=limit)
                 
                 responce = {}
 
                 for jira_result in jira_results:
-                    block = request_jql_repository.format_jira_issue_for_slack(jira_result)
+                    block = request_jira_repository.format_jira_issue_for_slack(jira_result)
                     responce[jira_result.key] = block
 
                 return responce

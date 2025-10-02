@@ -1,8 +1,9 @@
 # sheduler/main.py
+import os
 import sys
 from datetime import datetime, date
 
-from util.request_jql import RequestJqlRepository
+from util.request_jira import RequestJiraRepository
 
 class SchedulerTaskHandler:
     def execute(self, app, db, message_data_str):
@@ -37,7 +38,10 @@ class SchedulerTaskHandler:
                     user_id = user_info_response["user"]["id"]
                     
                     # JQLクエリを構築
+                    project_key = os.getenv("JIRA_PROJECT_KEY")
                     jql_query = f'assignee = "{user_email}" AND status in ("To Do", "IN_progress")'
+                    if project_key:
+                        jql_query = f'project = "{project_key}" AND {jql_query}'
                     
                     # JQLを実行してJiraからタスクを取得
                     jira_results = request_jql_repository.execute(jql_query)
