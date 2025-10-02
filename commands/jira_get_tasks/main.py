@@ -51,7 +51,7 @@ class CommandJiraGetTasksRepository:
                 request_jira_repository = RequestJiraRepository()
                 jql_query = request_jira_repository.build_jql_from_json(gemini_result)
                 limit = gemini_result.get("limit")
-                jira_results = request_jira_repository.execute(jql_query, max_results=limit)
+                jira_results = request_jira_repository.request_jql(jql_query, max_results=limit)
                 
                 responce = {}
 
