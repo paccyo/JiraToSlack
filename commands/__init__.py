@@ -1,3 +1,5 @@
+from util.get_slack_email import GetSlackUserIdToEmail
+
 from commands.add_user.main import CommandAddUserResponce
 from commands.del_user.main import CommandDelUserResponce
 from commands.jira.main import CommandJiraRepository
@@ -15,9 +17,9 @@ def register_commands(app):
         user_name = body["user_name"]
         text = body.get("text", "").strip()
 
-        # Slackプロフィールからメールアドレスを取得
-        slack_email_to_register = user_info["user"]["profile"]["email"]
-        
+        get_skack_user_id_to_email = GetSlackUserIdToEmail()
+        slack_email_to_register = get_skack_user_id_to_email.get_user_email(user_id)
+
         try:
             jira_email_to_regester = None
             if text:
