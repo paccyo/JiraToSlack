@@ -1,13 +1,25 @@
 
-import subprocess
 import os
+import subprocess
+import sys
+from pathlib import Path
 
 def run_dashboard_and_get_image():
     # ダッシュボード生成スクリプトを実行
     try:
-        subprocess.run([
-            "python", "-X", "utf8", "prototype/local_cli/main.py"
-        ], check=True)
+        repo_root = Path(__file__).resolve().parents[2]
+        base_env = os.environ.copy()
+        search_paths = [str(repo_root), str(repo_root / "prototype"), str(repo_root / "prototype" / "local_cli")]
+        existing_py_path = base_env.get("PYTHONPATH")
+        base_env["PYTHONPATH"] = os.pathsep.join(
+            [p for p in search_paths if p] + ([existing_py_path] if existing_py_path else [])
+        )
+        subprocess.run(
+            [sys.executable, "-X", "utf8", "prototype/local_cli/main.py"],
+            check=True,
+            cwd=str(repo_root),
+            env=base_env,
+        )
     except Exception as e:
         print(f"ダッシュボード生成に失敗しました: {e}")
         return None
