@@ -1,6 +1,4 @@
-from util.get_jira_data import GetJiraData
-from util.request_jira import RequestJiraRepository
-
+import actions.change_status.change_status as change_status
 
 
 def register_actions(app):
@@ -9,83 +7,58 @@ def register_actions(app):
     """
 
     @app.action("move_Todo")
-    def handle_move_todo_command(ack, body, say):
+    def handle_move_todo_command(ack, body, say, client):
         ack()
-
         try:
-            try:
-                get_jira_data = GetJiraData()
-                email = get_jira_data.get_slack_email_to_jira_email(body["user"]["email"])
-            except Exception as e:
-                say(f"エラーが発生しました: {e}")
-                return
-            
-            issue_key = body["actions"][0]["value"]
-            request_jira_repository = RequestJiraRepository()
-            request_jira_repository.issue_change_status(email, issue_key, "To Do")
-            say(f"✅ Jira課題 `{issue_key}` のステータスをToDoに変更しました。")
-        except Exception as e:
-            say(f"エラーが発生しました: {e}")
+            change_status(say, client, body, "TODO")
             return
+        except Exception as e:
+            print(f"ステータスの更新中にエラーが発生しました: {e}")
+            say(f"ステータスの更新中にエラーが発生しました: {e}")
+            return 
         
 
     @app.action("move_in_progress")
-    def handle_move_todo_command(ack, body, say):
+    def handle_move_in_progress_command(ack, body, say, client):
         ack()
-
         try:
-            try:
-                get_jira_data = GetJiraData()
-                email = get_jira_data.get_slack_email_to_jira_email(body["user"]["email"])
-            except Exception as e:
-                say(f"エラーが発生しました: {e}")
-                return            
-            issue_key = body["actions"][0]["value"]
-            request_jira_repository = RequestJiraRepository()
-            request_jira_repository.issue_change_status(email, issue_key, "IN_progress")
-            say(f"✅ Jira課題 `{issue_key}` のステータスをIN_progressに変更しました。")
-        except Exception as e:
-            say(f"エラーが発生しました: {e}")
+            change_status(say, client, body, "IN_progress")
             return
+        except Exception as e:
+            print(f"ステータスの更新中にエラーが発生しました: {e}")
+            say(f"ステータスの更新中にエラーが発生しました: {e}")
+            return 
+        
+    @app.action("move_reviewing")
+    def handle_move_in_progress_command(ack, body, say, client):
+        ack()
+        try:
+            change_status(say, client, body, "REVIEWING")
+            return
+        except Exception as e:
+            print(f"ステータスの更新中にエラーが発生しました: {e}")
+            say(f"ステータスの更新中にエラーが発生しました: {e}")
+            return 
 
     @app.action("move_abort")
-    def handle_move_todo_command(ack, body, say):
+    def handle_move_abort_command(ack, body, say, client):
         ack()
-
         try:
-            try:
-                get_jira_data = GetJiraData()
-                email = get_jira_data.get_slack_email_to_jira_email(body["user"]["email"])
-            except Exception as e:
-                say(f"エラーが発生しました: {e}")
-                return            
-            issue_key = body["actions"][0]["value"]
-            
-            request_jira_repository = RequestJiraRepository()
-            request_jira_repository.issue_change_status(email, issue_key, "Abort")
-            say(f"✅ Jira課題 `{issue_key}` のステータスをAbortに変更しました。")
-        except Exception as e:
-            say(f"エラーが発生しました: {e}")
+            change_status(say, client, body, "Abort")
             return
+        except Exception as e:
+            print(f"ステータスの更新中にエラーが発生しました: {e}")
+            say(f"ステータスの更新中にエラーが発生しました: {e}")
+            return 
+
 
     @app.action("move_compleated")
-    def handle_move_todo_command(ack, body, say):
+    def handle_move_compleated_command(ack, body, say, client):
         ack()
-
         try:
-            try:
-                get_jira_data = GetJiraData()
-                email = get_jira_data.get_slack_email_to_jira_email(body["user"]["email"])
-            except Exception as e:
-                say(f"エラーが発生しました: {e}")
-                return
-            issue_key = body["actions"][0]["value"]
-            request_jira_repository = RequestJiraRepository()
-            request_jira_repository.issue_change_status(email, issue_key, "完了")
-            say(f"✅ Jira課題 `{issue_key}` のステータスを完了に変更しました。")
-        except Exception as e:
-            say(f"エラーが発生しました: {e}")
+            change_status(say, client, body, "完了")
             return
-        
-
-
+        except Exception as e:
+            print(f"ステータスの更新中にエラーが発生しました: {e}")
+            say(f"ステータスの更新中にエラーが発生しました: {e}")
+            return

@@ -4,6 +4,8 @@ import sys
 
 from commands.jira.main import CommandJiraRepository
 from commands.jira_get_tasks.main import CommandJiraGetTasksRepository
+from util.get_slack_email import GetSlackUserIdToEmail
+
 from commands.add_user.main import CommandAddUserResponce
 from commands.del_user.main import CommandDelUserResponce
 from commands.jira.main import CommandJiraRepository
@@ -26,11 +28,9 @@ def register_commands(app):
         user_name = body["user_name"]
         text = body.get("text", "").strip()
 
-        # Slackプロフィールのメールアドレスを取得
-        user_info = client.users_info(user=user_id)
-        # Slackプロフィールからメールアドレスを取得
-        slack_email_to_register = user_info["user"]["profile"]["email"]
-        
+        get_skack_user_id_to_email = GetSlackUserIdToEmail()
+        slack_email_to_register = get_skack_user_id_to_email.get_user_email(user_id)
+
         try:
             jira_email_to_regester = None
             if text:
@@ -61,10 +61,11 @@ def register_commands(app):
             say(f"エラーが発生しました: {e}")
     
     @app.command("/jira")
-    def handle_jira_command(ack, say):
+    def handle_jira_command(ack, body, say):
         ack()
+        text = body["text"]
         command_jira_repository = CommandJiraRepository()
-        responce = command_jira_repository.execute()
+        responce = command_jira_repository.execute(text)
         say(responce)
 
     @app.command("/jira_get_tasks")
