@@ -5,7 +5,6 @@
     "endDate": "2025-10-02T01:54:00.000Z"
   },
   "totals": {
-    "parents": 9,
     "subtasks": 45,
     "done": 27,
     "notDone": 18
@@ -14,17 +13,10 @@
   "targetDoneRate": 0.8,
   "axis": "percent",
   "extrasAvailable": {
-    "burndown": true,
-    "velocity": true,
-    "project_sprint_count": true,
-    "status_counts": true,
-    "time_in_status": true,
-    "workload": true,
-    "project_subtask_count": true,
-    "projectAllSubtasks": true,
-    "kpis": true,
-    "risks": true,
-    "evidence": true,
-    "ai_full_text": false
+    "burndown": false,
+    "velocity": false,
+    "status_counts": false,
+    "time_in_status": false,
+    "workload": false
   }
 }

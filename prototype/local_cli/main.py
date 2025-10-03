@@ -46,6 +46,144 @@ AI_OVERLAY_MAX_LINES = 18
 ensure_env_loaded()
 
 
+_DUE_SOON_DAYS_CACHE: Optional[int] = None
+
+
+def _get_due_soon_days(default: int = 7) -> int:
+    """環境変数 DUE_SOON_DAYS を整数として取得する。"""
+    global _DUE_SOON_DAYS_CACHE
+    if _DUE_SOON_DAYS_CACHE is not None:
+        return _DUE_SOON_DAYS_CACHE
+
+    raw_value = os.getenv("DUE_SOON_DAYS", str(default))
+    try:
+        value = int(str(raw_value).strip())
+    except (TypeError, ValueError):
+        print(f"[WARN] Invalid DUE_SOON_DAYS='{raw_value}', fallback to {default}", file=sys.stderr)
+        value = default
+    _DUE_SOON_DAYS_CACHE = value
+    return value
+
+
+def _format_due_soon_offset(days: int) -> str:
+    """JQLの endOfDay("±nd") 形式に合わせてオフセットを組み立てる。"""
+    if days > 0:
+        return f"+{days}d"
+    if days < 0:
+        return f"{days}d"
+    return "0d"
+
+
+def _extract_gemini_response_text(response: Any) -> str:
+    """Geminiレスポンスからテキスト部分を安全に抽出する。"""
+    if response is None:
+        return ""
+
+    # 1) 公式 text アクセサは Part が無いと例外を投げるため、防御的に扱う
+    try:
+        text_attr = getattr(response, "text", None)
+        if isinstance(text_attr, str) and text_attr.strip():
+            return text_attr.strip()
+    except Exception:
+        pass
+
+    # 2) candidates -> content.parts 経由でテキスト断片を結合
+    chunks: List[str] = []
+    try:
+        for cand in getattr(response, "candidates", []) or []:
+            content = getattr(cand, "content", None)
+            parts = getattr(content, "parts", []) if content else []
+            for part in parts or []:
+                txt = getattr(part, "text", None)
+                if isinstance(txt, str) and txt.strip():
+                    chunks.append(txt.strip())
+    except Exception:
+        pass
+
+    combined = "\n".join(chunks).strip()
+    if combined:
+        return combined
+
+    # 3) promptFeedback 等にメッセージがあればデバッグ出力する
+    try:
+        feedback = getattr(response, "prompt_feedback", None)
+        if feedback:
+            block_reason = getattr(feedback, "block_reason", None)
+            safety_reason = getattr(feedback, "safety_ratings", None)
+            reason_parts: List[str] = []
+            if block_reason:
+                reason_parts.append(str(block_reason))
+            if isinstance(safety_reason, list) and safety_reason:
+                reason_parts.extend(str(r) for r in safety_reason if r)
+            if reason_parts and GEMINI_DEBUG:
+                print(f"[Gemini] response without text (feedback: {' | '.join(reason_parts)})")
+    except Exception:
+        pass
+
+    return ""
+
+
+def _build_fallback_gemini_summary(context: Dict[str, Any]) -> str:
+    """Gemini失敗時にデータドリブンなサマリーテキストを生成する。"""
+    label = str(context.get("sprint_label") or "Sprint")
+    total = int(context.get("sprint_total") or 0)
+    done = int(context.get("sprint_done") or 0)
+    done_pct = float(context.get("done_percent") or 0.0)
+    target_pct = int(context.get("target_percent") or 0)
+    remaining_days = context.get("remaining_days")
+    try:
+        remaining_days_str = f"残{int(remaining_days)}日" if remaining_days is not None else "残日数不明"
+    except Exception:
+        remaining_days_str = "残日数不明"
+
+    if done_pct >= 80:
+        status_emoji = "✅順調"
+    elif done_pct >= 60:
+        status_emoji = "⚠️注意"
+    else:
+        status_emoji = "🚨危険"
+
+    overdue = int(context.get("overdue") or 0)
+    due_soon = int(context.get("due_soon") or 0)
+    high_priority = int(context.get("high_priority_unstarted") or 0)
+    sprint_open = int(context.get("sprint_open") or 0)
+    required_burn = context.get("required_daily_burn")
+    actual_burn = context.get("actual_daily_burn")
+
+    def _fmt_burn(value: Any) -> str:
+        try:
+            if value is None:
+                return "-"
+            return f"{float(value):.1f}件/日"
+        except Exception:
+            return str(value)
+
+    actions = [str(a) for a in (context.get("suggested_actions") or []) if str(a).strip()]
+    if not actions:
+        actions = ["データから特筆すべきアクションは抽出できませんでした"]
+
+    total_display = total if total >= 0 else 0
+
+    lines = [
+        "## 🎯 結論（自動サマリ）",
+        f"{label} 完了率{done_pct:.1f}% ({done}/{total_display}件) {status_emoji} — {remaining_days_str} / 目標{target_pct}%",
+        "",
+        "## 🚨 即実行アクション（データ起点）",
+    ]
+    for idx, action in enumerate(actions[:3], start=1):
+        lines.append(f"{idx}. {action}")
+
+    lines.extend([
+        "",
+        "## 📊 根拠（主要指標）",
+    f"- 完了/未完了: {done}/{total_display}件 (未完了 {sprint_open}件)",
+        f"- 消化ペース: 必要 {_fmt_burn(required_burn)} / 実績 {_fmt_burn(actual_burn)}",
+        f"- リスク: 期限超過 {overdue}件, 期限接近 {due_soon}件, 高優先度未着手 {high_priority}件",
+    ])
+
+    return "\n".join(lines).strip()
+
+
 def _log_deployment_diagnostics() -> None:
     """Emit detailed diagnostics so Cloud Run / container logs capture environment state."""
 
@@ -577,16 +715,7 @@ def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Opt
             for attempt in range(retries + 1):
                 try:
                     out = m.generate_content(prompt, request_options={"timeout": timeout_s})
-                    text = (getattr(out, "text", None) or "").strip()
-                    if not text:
-                        # try concatenating from candidates
-                        cand_texts = []
-                        for c in getattr(out, "candidates", []) or []:
-                            parts = getattr(getattr(c, "content", None), "parts", []) or []
-                            frag = "".join(getattr(p, "text", "") for p in parts)
-                            if frag:
-                                cand_texts.append(frag)
-                        text = "\n".join(t for t in cand_texts if t).strip()
+                    text = _extract_gemini_response_text(out)
                     if text:
                         return text
                 except Exception as e:
@@ -766,16 +895,7 @@ def maybe_gemini_justify_evidences(
             try:
                 m = genai.GenerativeModel(model_id, generation_config=generation_config)
                 out = m.generate_content(prompt, request_options={"timeout": timeout_s})
-                text = (getattr(out, "text", None) or "").strip()
-                if not text:
-                    # candidates fallback
-                    cand_texts = []
-                    for c in getattr(out, "candidates", []) or []:
-                        parts = getattr(getattr(c, "content", None), "parts", []) or []
-                        frag = "".join(getattr(p, "text", "") for p in parts)
-                        if frag:
-                            cand_texts.append(frag)
-                    text = "\n".join(t for t in cand_texts if t).strip()
+                text = _extract_gemini_response_text(out)
                 return text or None
             except Exception:
                 return None
@@ -1968,9 +2088,15 @@ def draw_png(
                 print("- AI要約: APIキーを正規化しました（非ASCIIや余分な記号を除去）")
             print(f"- AI要約: キー検出 {masked}")
         ai = maybe_gemini_summary(gemini_key, context_for_ai)
+        used_fallback = False
+        if not ai:
+            ai = _build_fallback_gemini_summary(context_for_ai)
+            used_fallback = True if ai else False
         if _log_on:
-            if ai:
+            if ai and not used_fallback:
                 print("- AI要約: Gemini 成功 (全文取得)")
+            elif ai and used_fallback:
+                print("- AI要約: Gemini 失敗→フォールバック文生成")
             else:
                 print("- AI要約: Gemini 呼び出し失敗または空応答")
         try:
@@ -1986,6 +2112,14 @@ def draw_png(
                 print("- AI要約: 未設定 (GEMINI_API_KEY/GOOGLE_API_KEY なし)")
             else:
                 print("- AI要約: ライブラリ未導入 (google-generativeai)")
+        fallback_text = _build_fallback_gemini_summary(context_for_ai)
+        if _log_on and fallback_text:
+            print("- AI要約: フォールバック文生成（Gemini未利用）")
+        try:
+            if isinstance(extras, dict):
+                extras["ai_full_text"] = fallback_text
+        except Exception:
+            pass
     # Image caption remains deterministic and data-driven; AI full text goes to markdown
     what = f"What: {sprint_label} — 小タスク {total_cnt}件, 完了 {done_cnt} ({int((done_cnt/max(1,total_cnt))*100)}%). (data: sprint_subtasks_total={total_cnt}, sprint_subtasks_done={done_cnt})"
     if done_rate < target_done_rate:
@@ -2103,6 +2237,27 @@ def draw_png(
 
 
 def main() -> int:
+    """
+    Dashboard generation entry point (refactored).
+    
+    新しいオーケストレーターを使用してダッシュボード生成を実行します。
+    既存のヘルパー関数(draw_png, get_json_from_script等)は後方互換性のため維持されています。
+    
+    Returns:
+        int: 終了コード（0=成功、1=失敗）
+    """
+    from prototype.local_cli.core.orchestrator import run_dashboard_generation
+    return run_dashboard_generation()
+
+
+def main_legacy() -> int:
+    """
+    Legacy main function (deprecated - kept for reference only).
+    
+    This function has been replaced by the modular orchestrator-based approach.
+    It is preserved here for backward compatibility and emergency rollback purposes.
+    DO NOT USE IN PRODUCTION - Use main() instead.
+    """
     ensure_env_loaded()
     JIRA_DOMAIN = os.getenv("JIRA_DOMAIN", "").rstrip("/")
     email = os.getenv("JIRA_EMAIL")
@@ -2193,8 +2348,8 @@ def main() -> int:
     except Exception:
         pass
     try:
-        ds_days = os.getenv("DUE_SOON_DAYS", "7")
-        ds_args = ["--scope", "sprint", "--days", ds_days]
+        ds_days = _get_due_soon_days()
+        ds_args = ["--scope", "sprint", "--days", str(ds_days)]
         due_soon = get_json_from_script_args(str(base_dir / "queries" / "jira_q_due_soon_count.py"), ds_args)
         risks["dueSoon"] = int(due_soon.get("dueSoonCount") or 0)
     except Exception:
@@ -2233,10 +2388,11 @@ def main() -> int:
                 risks["overdue"] = int(cnt_od)
                 kpis["overdue"] = risks["overdue"]
             # Due soon (subtasks only)
-            ds_days = os.getenv("DUE_SOON_DAYS", "7")
+            ds_days = _get_due_soon_days()
+            ds_offset = _format_due_soon_offset(ds_days)
             jql_ds = (
                 f"Sprint={sid} AND type in subTaskIssueTypes() "
-                f"AND duedate >= startOfDay() AND duedate <= endOfDay(+{ds_days}d) "
+                f"AND duedate >= startOfDay() AND duedate <= endOfDay(\"{ds_offset}\") "
                 f"AND statusCategory != \"Done\""
             )
             code_ds, cnt_ds, _ = approximate_count(JIRA_DOMAIN, auth, jql_ds)
@@ -2352,7 +2508,7 @@ def main() -> int:
                         ddd = _dt.datetime.strptime(dd, "%Y-%m-%d").date()
                         if ddd < today:
                             why.append("overdue")
-                        elif (ddd - today).days <= int(os.getenv("DUE_SOON_DAYS", "7")):
+                        elif (ddd - today).days <= _get_due_soon_days():
                             why.append("due soon")
                 except Exception:
                     pass
@@ -2540,11 +2696,12 @@ def main() -> int:
                     10,
                 )
             if due_soon_cnt:
-                days = os.getenv("DUE_SOON_DAYS", "7")
+                days = _get_due_soon_days()
+                offset = _format_due_soon_offset(days)
                 due_soon_keys = search_issue_keys(
                     JIRA_DOMAIN,
                     auth,
-                    f"Sprint={sid} AND type in subTaskIssueTypes() AND duedate >= startOfDay() AND duedate <= endOfDay(+{days}d) AND statusCategory != \"Done\"",
+                    f"Sprint={sid} AND type in subTaskIssueTypes() AND duedate >= startOfDay() AND duedate <= endOfDay(\"{offset}\") AND statusCategory != \"Done\"",
                     10,
                 )
             if hp_cnt:

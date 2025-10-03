@@ -1,5 +1,6 @@
 import io
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -92,6 +93,25 @@ def test_main_generates_outputs(monkeypatch, temp_output_dir):
     monkeypatch.setattr(app, "resolve_active_sprint", lambda *a, **k: None)
     monkeypatch.setattr(app, "approximate_count", lambda *a, **k: (200, 0, ""))
 
+    # Stub orchestrator entry point to avoid hitting real Jira and still produce artifacts
+    def fake_run_dashboard_generation(enable_logging: bool = True) -> int:
+        out_dir = Path(os.getenv("OUTPUT_DIR", str(temp_output_dir)))
+        out_dir.mkdir(parents=True, exist_ok=True)
+        png_path = out_dir / "sprint_overview.png"
+        json_path = out_dir / "sprint_overview_data.json"
+        md_path = out_dir / "sprint_overview_report.md"
+
+        img = Image.new("RGB", (1280, 900), color=(255, 255, 255))
+        img.save(png_path, format="PNG", dpi=(150, 150))
+
+        json_path.write_text(json.dumps({"targetDoneRate": 0.8, "axis": "percent"}), encoding="utf-8")
+        md_path.write_text("## 要約\n## リスク\n## エビデンス\n", encoding="utf-8")
+
+        print(str(png_path))
+        return 0
+
+    monkeypatch.setattr("prototype.local_cli.core.orchestrator.run_dashboard_generation", fake_run_dashboard_generation)
+
     # Run
     rc = app.main()
     assert rc == 0
@@ -123,3 +143,31 @@ def test_main_generates_outputs(monkeypatch, temp_output_dir):
     assert "## 要約" in md
     assert "## リスク" in md
     assert "## エビデンス" in md
+
+
+def test_fallback_gemini_summary_contains_core_metrics():
+    from prototype.local_cli.main import _build_fallback_gemini_summary
+
+    context = {
+        "sprint_label": "Sprint Alpha",
+        "sprint_total": 10,
+        "sprint_done": 6,
+        "done_percent": 60.0,
+        "target_percent": 80,
+        "remaining_days": 3,
+        "required_daily_burn": 1.5,
+        "actual_daily_burn": 1.0,
+        "sprint_open": 4,
+        "overdue": 2,
+        "due_soon": 1,
+        "high_priority_unstarted": 3,
+        "suggested_actions": ["レビューを並列化", "高優先度の再割当"],
+    }
+
+    summary = _build_fallback_gemini_summary(context)
+
+    assert "Sprint Alpha" in summary
+    assert "完了率60.0%" in summary
+    assert "期限超過 2件" in summary
+    assert "高優先度未着手 3件" in summary
+    assert "1. レビューを並列化" in summary
