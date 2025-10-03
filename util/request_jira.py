@@ -260,3 +260,18 @@ class RequestJiraRepository:
             print(f"❌ Jira API Error for issue {issue_key}: Status {e.status_code} - {e.text}")
         except Exception as e:
             print(f"❌ An unexpected error occurred: {e}")
+
+    def get_subtasks(self, issue_key):
+        """Jira課題の子タスクを取得する関数"""
+        print(f"DEBUG: get_subtasks called. issue='{issue_key}'")
+        try:
+            issue = self.jira_client.issue(issue_key, fields="subtasks")
+            subtasks = issue.fields.subtasks
+            print(f"✅ Successfully retrieved {len(subtasks)} subtasks for issue {issue_key}")
+            return subtasks
+        except JIRAError as e:
+            print(f"❌ Jira API Error for issue {issue_key}: Status {e.status_code} - {e.text}")
+            return None
+        except Exception as e:
+            print(f"❌ An unexpected error occurred: {e}")
+            return None
