@@ -1,19 +1,11 @@
 import os
-import sys
 
-
-from commands.jira.main import CommandJiraRepository
-from commands.jira_get_tasks.main import CommandJiraGetTasksRepository
 from util.get_slack_email import GetSlackUserIdToEmail
-
-from commands.add_user.main import CommandAddUserResponce
-from commands.del_user.main import CommandDelUserResponce
-from commands.jira.main import CommandJiraRepository
-from commands.jira_get_tasks.main import CommandJiraGetTasksRepository
 
 # Jiraバックログダッシュボード画像生成関数
 def run_jira_backlog_dashboard():
     from .jira_backlog_report.main import run_dashboard_and_get_image
+
     return run_dashboard_and_get_image()
 
 
@@ -21,6 +13,12 @@ def register_commands(app):
     """
     Registers all slash commands with the provided app instance.
     """
+
+    from commands.add_user.main import CommandAddUserResponce
+    from commands.del_user.main import CommandDelUserResponce
+    from commands.jira.main import CommandJiraRepository
+    from commands.jira_get_tasks.main import CommandJiraGetTasksRepository
+
     @app.command("/add_user")
     def handle_add_user_command(ack, body, say, client):
         ack()
