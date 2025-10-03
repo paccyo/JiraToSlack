@@ -49,10 +49,11 @@ def register_commands(app):
             say(f"エラーが発生しました: {e}")
     
     @app.command("/jira")
-    def handle_jira_command(ack, say):
+    def handle_jira_command(ack, body, say):
         ack()
+        text = body["text"]
         command_jira_repository = CommandJiraRepository()
-        responce = command_jira_repository.execute()
+        responce = command_jira_repository.execute(text)
         say(responce)
 
     @app.command("/jira_get_tasks")
