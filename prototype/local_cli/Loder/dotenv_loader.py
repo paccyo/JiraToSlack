@@ -25,10 +25,26 @@ def _candidate_paths() -> Iterable[Path]:
 
 @lru_cache(maxsize=1)
 def ensure_env_loaded(override: bool = True) -> bool:
-    """Load environment variables from candidate .env files.
+    """Load environment variables from candidate .env files unless running tests.
 
-    Returns True if at least one .env file was loaded.
+    ポイント:
+    - pytest 実行中は `.env` を読まない (テストが意図せず本番認証を拾うのを防止)
+    - 明示的な専用フラグ環境変数は追加しない (要望: 余計な環境変数導入を避ける)
+    判定ロジック:
+      * 環境変数 PYTEST_CURRENT_TEST が存在
+        もしくは sys.argv[0] / コマンドラインに 'pytest' が含まれる
     """
+    import sys
+
+    # Detect pytest without introducing a new env toggle
+    running_pytest = (
+        'PYTEST_CURRENT_TEST' in os.environ or
+        any('pytest' in (arg or '') for arg in sys.argv[:2])
+    )
+    if running_pytest:
+        # Skip loading .env files to keep tests deterministic
+        return False
+
     loaded = False
     for path in _candidate_paths():
         if path.exists():

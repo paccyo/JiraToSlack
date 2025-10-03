@@ -6,7 +6,10 @@ Phase 3: コアデータ取得
 import logging
 from typing import List, Optional, Dict, Any
 
-from Loder.jira_client import JiraClient
+try:  # Prefer absolute for test monkeypatch compatibility
+    from Loder.jira_client import JiraClient  # type: ignore
+except Exception:  # pragma: no cover
+    from ..Loder.jira_client import JiraClient  # type: ignore
 from .types import (
     AuthContext,
     JiraMetadata,

@@ -708,27 +708,48 @@ def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Opt
 
         # Use REST transport to avoid gRPC plugin metadata issues
         genai.configure(api_key=api_key, transport="rest")
-        generation_config = {"temperature": temp, "top_p": top_p, "max_output_tokens": 640}
-        def _call(model_id: str) -> Optional[str]:
-            m = genai.GenerativeModel(model_id, generation_config=generation_config)
+        generation_config = {"temperature": temp, "top_p": top_p, "max_output_tokens": 1024}
+
+        def _call(model_id: str, contents: List[Dict[str, Any]], system_instruction: str) -> Optional[str]:
+            m = genai.GenerativeModel(
+                model_id,
+                generation_config=generation_config,
+                system_instruction=system_instruction,
+            )
             last_err: Optional[Exception] = None
             for attempt in range(retries + 1):
                 try:
-                    out = m.generate_content(prompt, request_options={"timeout": timeout_s})
+                    out = m.generate_content(contents, request_options={"timeout": timeout_s})
                     text = _extract_gemini_response_text(out)
                     if text:
                         return text
+                    if GEMINI_DEBUG:
+                        try:
+                            details = out.to_dict() if hasattr(out, "to_dict") else None
+                        except Exception:  # pragma: no cover - defensive logging only
+                            details = None
+                        finish = None
+                        try:
+                            cand0 = (out.candidates or [None])[0]
+                            finish = getattr(cand0, "finish_reason", None)
+                        except Exception:
+                            finish = None
+                        print(
+                            "[Gemini] empty text (model={model_id}, finish={finish}, details={details})".format(
+                                model_id=model_id,
+                                finish=finish,
+                                details=json.dumps(details, ensure_ascii=False) if details else "{}",
+                            )
+                        )
                 except Exception as e:
                     last_err = e
                     if GEMINI_DEBUG:
                         print(f"[Gemini] attempt {attempt+1}/{retries+1} failed: {e}")
-                # backoff
                 try:
                     import time as _t
                     _t.sleep(0.6 * (attempt + 1))
                 except Exception:
                     pass
-            # if all attempts failed
             if GEMINI_DEBUG and last_err:
                 print(f"[Gemini] error on model {model_id}: {last_err}")
             return None
@@ -812,21 +833,51 @@ def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Opt
         )
         
         # プロンプト組み立て
-        prompt = (
+        system_instruction = (
             intro
             + "\n[出力形式]\n"
             + output_format
-            + "\n" + constraints
-            + "\n" + format_specs
-            + "\n" + example_output
-            + f"\n\n【分析対象データ】\nコンテキスト(JSON): {json.dumps(context, ensure_ascii=False, indent=2)}\n"
-            + "\n上記JSONデータのみを根拠として、出力形式に厳密に従い分析結果を出力してください。"
+            + "\n"
+            + constraints
+            + "\n"
+            + format_specs
+            + "\n"
+            + example_output
         )
-        # Try primary then fallback model
-        text = _call(model_name)
+
+        user_prompt = dedent(
+            """
+            以下は最新のスプリントメトリクスです。指定された出力形式に合わせてMarkdownで要約してください。
+            【分析対象データ(JSON)】
+            {json_blob}
+            上記JSON以外の情報は使用せず、定量データと担当者名を必ず含めてください。
+            """
+        ).format(json_blob=json.dumps(context, ensure_ascii=False, indent=2))
+
+        contents: List[Dict[str, Any]] = [
+            {
+                "role": "user",
+                "parts": [
+                    {
+                        "text": user_prompt,
+                    }
+                ],
+            }
+        ]
+
+        models_to_try = [model_name]
+        for fallback_id in ("gemini-2.0-flash", "gemini-1.5-flash"):
+            if fallback_id not in models_to_try:
+                models_to_try.append(fallback_id)
+
+        text: Optional[str] = None
+        for model_id in models_to_try:
+            text = _call(model_id, contents, system_instruction)
+            if text:
+                break
 
         if not text and GEMINI_DEBUG:
-            print("[Gemini] empty response from both primary and fallback models")
+            print("[Gemini] empty response from Gemini after trying all models")
         return text
     except Exception as e:
         if GEMINI_DEBUG:

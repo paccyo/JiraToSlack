@@ -9,7 +9,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
 if TYPE_CHECKING:
-    from Loder.jira_client import JiraClient
+    try:
+        from Loder.jira_client import JiraClient  # type: ignore
+    except Exception:  # pragma: no cover
+        from ..Loder.jira_client import JiraClient  # type: ignore
 
 from .types import AuthContext, JiraMetadata, CoreData, MetricsCollection
 
@@ -55,7 +58,10 @@ def collect_metrics(
         logger.info("Phase 4: メトリクス収集を開始します")
     
     try:
-        from Loder.jira_client import JiraClient
+        try:
+            from Loder.jira_client import JiraClient  # type: ignore
+        except Exception:  # pragma: no cover
+            from ..Loder.jira_client import JiraClient  # type: ignore
         client = JiraClient()
         sprint_id = metadata.sprint.sprint_id
         project_key = metadata.project_key

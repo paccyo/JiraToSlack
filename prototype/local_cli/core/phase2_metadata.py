@@ -6,7 +6,10 @@ Phase 2: Jiraメタデータ取得
 import logging
 from typing import Optional, Tuple
 
-from Loder.jira_client import JiraClient
+try:  # Prefer absolute so tests that inject sys.modules['Loder'] still work
+    from Loder.jira_client import JiraClient  # type: ignore
+except Exception:  # pragma: no cover
+    from ..Loder.jira_client import JiraClient  # type: ignore
 from .types import AuthContext, JiraMetadata, BoardMetadata, SprintMetadata
 
 
