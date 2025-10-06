@@ -275,3 +275,27 @@ class RequestJiraRepository:
         except Exception as e:
             print(f"❌ An unexpected error occurred: {e}")
             return None
+
+    # def get_unique_field_values(self, field_id):
+    #     """指定されたフィールドの全てのユニークな値を取得する"""
+    #     print(f"DEBUG: get_unique_field_values called for field_id='{field_id}'")
+    #     unique_values = set()
+    #     try:
+    #         # JQLクエリを構築して、指定されたフィールドが空でないすべての課題を検索
+    #         jql_query = f'project = {self.project_key} AND "{field_id}" is not EMPTY'
+            
+    #         # JQLを実行して課題を検索 (max_results=Falseで全件取得)
+    #         issues = self.request_jql(jql_query, max_results=False)
+            
+    #         if issues:
+    #             for issue in issues:
+    #                 field_value = getattr(issue.fields, field_id, None)
+    #                 if field_value is not None:
+    #                     unique_values.add(field_value)
+            
+    #         print(f"✅ Found {len(unique_values)} unique values for field '{field_id}'")
+    #         return sorted(list(unique_values))
+
+    #     except Exception as e:
+    #         print(f"❌ An error occurred while fetching unique field values: {e}")
+    #         return []
