@@ -6,7 +6,7 @@ Gemini APIを使用してスプリントの要約とエビデンスの理由を�
 import logging
 import os
 import json
-from typing import Dict, Any, Optional, List, TYPE_CHECKING
+from typing import Dict, Any, Optional, List, TYPE_CHECKING, Iterable
 from textwrap import dedent
 from datetime import datetime, date
 
@@ -62,56 +62,172 @@ def _sanitize_api_key(raw_key: Optional[str]) -> Optional[str]:
     return key if key else None
 
 
+def _summarize_velocity(data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    summary: Dict[str, Any] = {}
+    if not isinstance(data, dict):
+        return summary
+
+    try:
+        summary["planned_story_points"] = float(data.get("plannedSP") or 0.0)
+        summary["completed_story_points"] = float(data.get("completedSP") or 0.0)
+        summary["completion_rate"] = float(data.get("completionRate") or 0.0)
+    except Exception:
+        pass
+
+    hist = data.get("historical")
+    if isinstance(hist, dict):
+        if "averageCompletedSP" in hist:
+            summary["historical_average_completed"] = hist.get("averageCompletedSP")
+        if "averagePlannedSP" in hist:
+            summary["historical_average_planned"] = hist.get("averagePlannedSP")
+
+    return summary
+
+
+def _summarize_workload(workload: Optional[Dict[str, Dict[str, Any]]], limit: int = 5) -> List[Dict[str, Any]]:
+    if not isinstance(workload, dict):
+        return []
+
+    rows: List[Dict[str, Any]] = []
+    for name, info in workload.items():
+        try:
+            subtasks = int(info.get("subtasks") or 0)
+            done = int(info.get("done") or 0)
+            rows.append(
+                {
+                    "assignee": name,
+                    "subtasks": subtasks,
+                    "done": done,
+                    "story_points": info.get("storyPoints"),
+                }
+            )
+        except Exception:
+            continue
+
+    rows.sort(key=lambda r: (-(r["subtasks"] - r["done"]), -r["subtasks"], r["assignee"]))
+    return rows[:limit]
+
+
+def _summarize_evidence(evidence: Optional[Iterable[Dict[str, Any]]], limit: int = 5) -> List[Dict[str, Any]]:
+    result: List[Dict[str, Any]] = []
+    if not evidence:
+        return result
+    for row in evidence:
+        if not isinstance(row, dict):
+            continue
+        trimmed = {
+            "key": row.get("key"),
+            "summary": row.get("summary"),
+            "status": row.get("status"),
+            "assignee": row.get("assignee"),
+            "priority": row.get("priority"),
+            "days": row.get("days"),
+            "reason": row.get("why"),
+            "due": row.get("duedate") or row.get("due"),
+        }
+        result.append(trimmed)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _summarize_status_counts(status_counts: Optional[Dict[str, Any]], limit: int = 6) -> Dict[str, Any]:
+    if not isinstance(status_counts, dict):
+        return {}
+
+    summary: Dict[str, Any] = {"total": status_counts.get("total")}
+    rows = status_counts.get("byStatus") if isinstance(status_counts.get("byStatus"), list) else []
+    compact: List[Dict[str, Any]] = []
+    for row in rows[:limit]:
+        if not isinstance(row, dict):
+            continue
+        compact.append({"name": row.get("name"), "count": row.get("count")})
+    if compact:
+        summary["by_status"] = compact
+    return summary
+
+
+def _normalize_risks(risks: Optional[Dict[str, Any]]) -> Dict[str, int]:
+    result: Dict[str, int] = {"overdue": 0, "due_soon": 0, "high_priority_unstarted": 0}
+    if not isinstance(risks, dict):
+        return result
+    try:
+        result["overdue"] = int(risks.get("overdue", 0))
+    except Exception:
+        pass
+    try:
+        result["due_soon"] = int(risks.get("dueSoon", 0))
+    except Exception:
+        pass
+    try:
+        result["high_priority_unstarted"] = int(risks.get("highPriorityTodo", 0))
+    except Exception:
+        pass
+    return result
+
+
+def _select_kpis(kpis: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not isinstance(kpis, dict):
+        return {}
+    keys = [
+        "projectTotal",
+        "projectOpenTotal",
+        "sprintTotal",
+        "sprintDone",
+        "sprintOpen",
+        "unassignedCount",
+    ]
+    return {k: kpis.get(k) for k in keys if k in kpis}
+
+
 def _build_context(
     config: EnvironmentConfig,
     metadata: JiraMetadata,
     core_data: CoreData,
     metrics: MetricsCollection
 ) -> Dict[str, Any]:
-    """
-    AI要約用のコンテキストを構築する。
-    
-    Args:
-        config: 環境設定
-        metadata: Jiraメタデータ
-        core_data: コアデータ
-        metrics: メトリクス
-    
-    Returns:
-        Dict[str, Any]: コンテキスト辞書
-    """
-    # スプリント情報
+    """AI要約用のコンテキストを必要十分な情報に絞って構築する。"""
+
     sprint_name = metadata.sprint.sprint_name or "現在のスプリント"
     sprint_start = metadata.sprint.sprint_start
     sprint_end = metadata.sprint.sprint_end
-    
-    # 残日数計算
+
     remaining_days = 0
     if sprint_end:
         try:
             if isinstance(sprint_end, str):
-                end_date = datetime.fromisoformat(sprint_end.replace('Z', '+00:00')).date()
+                end_date = datetime.fromisoformat(sprint_end.replace("Z", "+00:00")).date()
             else:
                 end_date = sprint_end
-            
-            today = date.today()
-            remaining_days = max(0, (end_date - today).days)
+            remaining_days = max(0, (end_date - date.today()).days)
         except Exception:
             remaining_days = 0
-    
-    # 完了率
+
     done_percent = core_data.totals.completion_rate * 100
     target_percent = int(config.target_done_rate * 100)
-    
-    # 担当者リスト
-    assignees = sorted(set(
-        subtask.assignee
-        for parent in core_data.parents
-        for subtask in parent.subtasks
-        if subtask.assignee
-    ))
-    
-    # コンテキスト構築
+
+    assignees = sorted(
+        {
+            subtask.assignee
+            for parent in core_data.parents
+            for subtask in parent.subtasks
+            if subtask.assignee
+        }
+    )[:25]
+
+    subtasks_total = core_data.totals.subtasks
+    subtasks_done = core_data.totals.done
+    subtasks_not_done = core_data.totals.not_done
+
+    required_daily_burn: Optional[float] = None
+    if remaining_days > 0:
+        try:
+            target_absolute = int(round(config.target_done_rate * subtasks_total))
+            remaining_to_target = max(0, target_absolute - subtasks_done)
+            required_daily_burn = round(remaining_to_target / remaining_days, 2) if remaining_to_target else 0.0
+        except Exception:
+            required_daily_burn = None
+
     context = {
         "sprint_name": sprint_name,
         "sprint_start": sprint_start,
@@ -119,15 +235,19 @@ def _build_context(
         "remaining_days": remaining_days,
         "target_done_rate": target_percent,
         "done_percent": round(done_percent, 1),
-        "subtasks_total": core_data.totals.subtasks,
-        "subtasks_done": core_data.totals.done,
-        "subtasks_not_done": core_data.totals.not_done,
+        "subtasks_total": subtasks_total,
+        "subtasks_done": subtasks_done,
+        "subtasks_not_done": subtasks_not_done,
         "assignees": assignees,
-        "parents": [p.to_dict() for p in core_data.parents],
-        "kpis": metrics.kpis,
-        "risks": metrics.risks,
+        "required_daily_burn": required_daily_burn,
+        "kpis": _select_kpis(metrics.kpis),
+        "risks": _normalize_risks(metrics.risks),
+        "velocity": _summarize_velocity(metrics.velocity),
+        "workload": _summarize_workload(metrics.assignee_workload),
+        "top_evidence": _summarize_evidence(metrics.evidence),
+        "status_snapshot": _summarize_status_counts(metrics.status_counts),
     }
-    
+
     return context
 
 
@@ -166,31 +286,31 @@ def _generate_summary(
         
         # プロンプト構築
         assignee_str = ", ".join(context["assignees"]) if context["assignees"] else "(担当者なし)"
-        
+
         intro = dedent(
             """
             あなたは経験豊富なアジャイルコーチ兼データアナリストです。提示するコンテキスト(JSON)のみを唯一の事実情報源として分析し、
             仮定や想像の数値は用いず、[出力形式]に厳密に従って、実務に直結する洞察とアクションを提示してください。
             """
         )
-        
+
         output_format = dedent(
             f"""
             ## 🎯 結論（1行断言）
             完了率[X%] - [順調✅/注意⚠️/危険🚨] 残[Y]日で目標[Z%]（[理由5字以内]）
-            
+
             ## 🚨 即実行アクション（重要順3つ）
             ※担当者名は必ず以下のリストから選択してください: {assignee_str}
             1. [担当者] → [タスク] （[期限]）
-            2. [担当者] → [タスク] （[期限]） 
+            2. [担当者] → [タスク] （[期限]）
             3. [担当者] → [タスク] （[期限]）
-            
+
             ## 📊 根拠（2行以内）
             • データ: 完了[X]/全[Y]件、必要消化[Z]件/日（実績[W]件/日）
             • 問題: [最大リスク] + [ボトルネック] = [影響度数値]
             """
         )
-        
+
         constraints = dedent(
             """
             【厳守制約】
@@ -202,7 +322,7 @@ def _generate_summary(
             - JSONデータ以外の情報使用禁止
             """
         )
-        
+
         format_specs = dedent(
             """
             【出力仕様】
@@ -213,7 +333,7 @@ def _generate_summary(
             • 期限表記: 相対表現（今日、明日、X日後）または具体日時
             """
         )
-        
+
         example_output = dedent(
             """
             【出力例】
@@ -231,25 +351,14 @@ def _generate_summary(
             """
         )
         
-        prompt = (
-            intro
-            + "\n[出力形式]\n"
-            + output_format
-            + "\n" + constraints
-            + "\n" + format_specs
-            + "\n" + example_output
-            + f"\n\n【分析対象データ】\nコンテキスト(JSON): {json.dumps(context, ensure_ascii=False, indent=2)}\n"
-            + "\n上記JSONデータのみを根拠として、出力形式に厳密に従い分析結果を出力してください。"
-        )
-        
         # API呼び出しロジック
-        def _call(model_id: str) -> Optional[str]:
+        def _call(model_id: str, prompt_text: str) -> Optional[str]:
             m = genai.GenerativeModel(model_id, generation_config=generation_config)
             last_err: Optional[Exception] = None
             
             for attempt in range(retries + 1):
                 try:
-                    out = m.generate_content(prompt, request_options={"timeout": timeout_s})
+                    out = m.generate_content(prompt_text, request_options={"timeout": timeout_s})
                     text = (getattr(out, "text", None) or "").strip()
                     
                     if not text:
@@ -282,21 +391,27 @@ def _generate_summary(
             return None
         
         # モデルフォールバック候補
-        fallback_model = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-1.5-flash")
+        default_fallback = "gemini-1.5-flash-001"
+        fallback_model = os.getenv("GEMINI_FALLBACK_MODEL", default_fallback)
         models_chain: List[str] = [model_name]
         if fallback_model and fallback_model != model_name:
             models_chain.append(fallback_model)
+        for alt in ("gemini-2.0-flash", "gemini-1.5-flash"):
+            if alt not in models_chain:
+                models_chain.append(alt)
 
-        # コンテキスト縮小（KPIと基本情報のみ）
+        # コンテキスト縮小（主要指標のみ）
         compact_context = {
             "sprint_name": context.get("sprint_name"),
             "remaining_days": context.get("remaining_days"),
             "done_percent": context.get("done_percent"),
             "target_done_rate": context.get("target_done_rate"),
-            "kpis": context.get("kpis"),
-            "risks": context.get("risks"),
             "subtasks_total": context.get("subtasks_total"),
             "subtasks_done": context.get("subtasks_done"),
+            "subtasks_not_done": context.get("subtasks_not_done"),
+            "risks": context.get("risks"),
+            "top_evidence": context.get("top_evidence"),
+            "workload": context.get("workload"),
         }
 
         def _build_prompt(ctx: Dict[str, Any]) -> str:
@@ -306,7 +421,7 @@ def _generate_summary(
                 + "\n" + constraints
                 + "\n" + format_specs
                 + "\n" + example_output
-                + f"\n\n【分析対象データ】\nコンテキスト(JSON): {json.dumps(ctx, ensure_ascii=False, indent=2)}\n"
+                + f"\n\n【分析対象データ】\nコンテキスト(JSON): {json.dumps(ctx, ensure_ascii=False, separators=(',', ':'))}\n"
                 + "\n上記JSONデータのみを根拠として、出力形式に厳密に従い分析結果を出力してください。"
             )
 
@@ -319,7 +434,7 @@ def _generate_summary(
         last_text: Optional[str] = None
         for mid, mode in attempts_plan:
             prompt_to_use = _build_prompt(context if mode == "full" else compact_context)
-            text = _call(mid)
+            text = _call(mid, prompt_to_use)
             if text:
                 if GEMINI_DEBUG:
                     logger.info(f"[Phase 5][AI] 成功 model={mid} mode={mode}")

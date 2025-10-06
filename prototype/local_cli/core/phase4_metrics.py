@@ -78,18 +78,16 @@ def collect_metrics(
         # 結果を集約
         metrics = _aggregate_metrics(results, core_data)
 
-        # 追加: Velocity / Burndown / Evidence
+        # 追加: Velocity / Evidence (Burndown削除)
+        # Velocity
         try:
             velocity = _calculate_velocity(core_data)
             metrics.velocity = velocity
-            if enable_logging:
-                logger.info(f"[Phase 4] Velocity: completed {velocity['completedSP']} / planned {velocity['plannedSP']} SP ({int(velocity['completionRate']*100)}%)")
-        except Exception as ve:  # pragma: no cover (安全バリア)
+        except Exception as ve:  # pragma: no cover
             logger.warning(f"Velocity計算でエラー: {ve}")
 
-        # 歴史的ベロシティ（過去スプリント平均）
+        # Historical Velocity
         try:
-            # 環境変数でサンプル数制御
             import os
             hv_sample_limit_raw = os.getenv("HISTORICAL_VELOCITY_SAMPLE_LIMIT", "6")
             try:
@@ -113,14 +111,6 @@ def collect_metrics(
                 logger.warning("[Phase 4] Historical Velocity: サンプルが取得できませんでした (フォールバック無効)")
         except Exception as hve:  # pragma: no cover
             logger.warning(f"Historical Velocity計算でエラー: {hve}")
-
-        try:
-            burndown = _calculate_burndown(core_data, metadata)
-            metrics.burndown = burndown
-            if burndown and enable_logging:
-                logger.info(f"[Phase 4] Burndown points: {len(burndown['dates'])} days, start={burndown['remaining'][0]} end={burndown['remaining'][-1]}")
-        except Exception as be:  # pragma: no cover
-            logger.warning(f"Burndown計算でエラー: {be}")
 
         try:
             evidence = _extract_evidence(core_data, results, metadata, top_n=5)
@@ -426,61 +416,7 @@ def _calculate_velocity(core_data: CoreData) -> Dict[str, Any]:
     }
 
 
-def _calculate_burndown(core_data: CoreData, metadata: JiraMetadata) -> Optional[Dict[str, Any]]:
-    """Burndownデータを生成する。"""
-    import datetime as dt
-    start = metadata.sprint.sprint_start
-    end = metadata.sprint.sprint_end
-    if not start or not end:
-        return None
-    try:
-        start_dt = dt.datetime.fromisoformat(start.replace("Z", "+00:00")).date()
-        end_dt = dt.datetime.fromisoformat(end.replace("Z", "+00:00")).date()
-    except Exception:
-        return None
-    if end_dt < start_dt:
-        return None
-    days: List[dt.date] = []
-    cur = start_dt
-    while cur <= end_dt:
-        days.append(cur)
-        cur += dt.timedelta(days=1)
-    # planned
-    planned = 0.0
-    completions: List[tuple[dt.date, float]] = []
-    for parent in core_data.parents:
-        for st in parent.subtasks:
-            sp = _normalize_story_points(st.story_points)
-            planned += sp
-            if st.completed_at:
-                try:
-                    cdate = dt.datetime.fromisoformat(st.completed_at.replace("Z", "+00:00")).date()
-                    completions.append((cdate, sp))
-                except Exception:
-                    pass
-    if planned <= 0:
-        return None
-    remaining: List[float] = []
-    remaining_val = planned
-    for d in days:
-        # 当日までに完了したSPを差し引く
-        day_completed = sum(sp for cdate, sp in completions if cdate <= d)
-        remaining_val = max(0.0, planned - day_completed)
-        remaining.append(round(remaining_val, 2))
-    # Ideal line
-    total_days = len(days)
-    if total_days <= 1:
-        ideal = [planned, 0.0]
-    else:
-        step = planned / (total_days - 1)
-        ideal = [round(max(0.0, planned - step * i), 2) for i in range(total_days)]
-    return {
-        "dates": [d.isoformat() for d in days],
-        "remaining": remaining,
-        "ideal": ideal,
-        "plannedSP": round(planned, 2),
-        "unit": "days",
-    }
+## Burndown機能は削除されました（_calculate_burndown 関数は存在しません）
 
 
 def _extract_evidence(core_data: CoreData, query_results: Dict[str, int], metadata: JiraMetadata, top_n: int = 5) -> Optional[List[Dict[str, Any]]]:

@@ -193,8 +193,8 @@ def test_generate_markdown_report_basic(
     assert output_path.exists()
     
     # 内容を確認
-    content = output_path.read_text(encoding="utf-8")
-    assert "## 要約" in content
+        # burndown削除後: extrasAvailableからburndownキーは存在しない想定
+        assert "burndown" not in extras
     assert "Sprint 1" in content
     assert "2 tasks" in content
     assert "Done 1" in content
@@ -395,9 +395,9 @@ def test_export_metrics_json_extras_available(
     
     assert "extrasAvailable" in data
     extras = data["extrasAvailable"]
-    assert "burndown" in extras
+    # burndown削除後: burndownキーは存在しない
+    assert "burndown" not in extras
     assert "velocity" in extras
-    assert extras["burndown"] == False
     assert extras["velocity"] == False
 
 

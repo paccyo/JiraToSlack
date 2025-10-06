@@ -35,7 +35,6 @@ from textwrap import dedent
 
 
 # Local configuration defaults (managed within code instead of environment variables)
-BURNDOWN_UNIT = "issues"
 GEMINI_DEBUG = True
 GEMINI_TIMEOUT = 40.0
 GEMINI_RETRIES = 2
@@ -852,7 +851,7 @@ def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Opt
             {json_blob}
             上記JSON以外の情報は使用せず、定量データと担当者名を必ず含めてください。
             """
-        ).format(json_blob=json.dumps(context, ensure_ascii=False, indent=2))
+        ).format(json_blob=json.dumps(context, ensure_ascii=False, separators=(',', ':')))
 
         contents: List[Dict[str, Any]] = [
             {
@@ -866,8 +865,8 @@ def maybe_gemini_summary(api_key: Optional[str], context: Dict[str, Any]) -> Opt
         ]
 
         models_to_try = [model_name]
-        for fallback_id in ("gemini-2.0-flash", "gemini-1.5-flash"):
-            if fallback_id not in models_to_try:
+        for fallback_id in ("gemini-2.0-flash", "gemini-1.5-flash-001", "gemini-1.5-flash"):
+            if fallback_id and fallback_id not in models_to_try:
                 models_to_try.append(fallback_id)
 
         text: Optional[str] = None
@@ -1086,7 +1085,7 @@ def draw_png(
     header_right_w = int(W * 0.42)
     proj_x1, proj_y1 = W - padding - header_right_w - 12, proj_y0 + project_bar_h
 
-    # (title drawn later after burndown)
+    # (title drawn later)
     boards_n = max(1, boards_n)
     board_gap = 2
     board_seg_w = (proj_x1 - proj_x0 - (boards_n - 1) * board_gap) // boards_n
@@ -1281,192 +1280,11 @@ def draw_png(
     else:
         g.text(tgt_pos_top, tgt_label, font=font_sm, fill=col_benchmark)
 
-    # (Removed prominent banner to avoid overlap with title area)
-
-    # Header right: Burndown sparkline
-    def draw_burndown_sparkline(x0: int, y0: int, w: int, h: int, bd: Optional[Dict[str, Any]]) -> None:
-        if not bd:
-            g.rectangle([x0, y0, x0 + w, y0 + h], outline=col_outline, fill=(250, 250, 250))
-            g.text((x0 + 8, y0 + 8), "データなし", font=font_sm, fill=(120, 120, 120))
-            return
-        series = bd.get("timeSeries") or []
-        ideal = bd.get("ideal") or []
-        if not series:
-            g.rectangle([x0, y0, x0 + w, y0 + h], outline=col_outline, fill=(250, 250, 250))
-            g.text((x0 + 8, y0 + 8), "データなし", font=font_sm, fill=(120, 120, 120))
-            return
-        pad_left = 10
-        pad_right = 10
-        pad_bottom = 10
-        pad_top = 28  # 上部余白を拡大（タイトル＋ラベル分）
-        pad = 10  # 予測部分で使用
-        gx0, gy0 = x0, y0
-        gx1, gy1 = x0 + w, y0 + h
-        g.rectangle([gx0, gy0, gx1, gy1], outline=col_outline, fill=(250, 250, 250))
-        # axes
-        g.line([gx0 + pad_left, gy1 - pad_bottom, gx1 - pad_right, gy1 - pad_bottom], fill=col_outline)
-        g.line([gx0 + pad_left, gy0 + pad_top, gx0 + pad_left, gy1 - pad_bottom], fill=col_outline)
-        # scale
-        # 実績データは全てのtimeSeriesデータをグラフに反映
-        filtered_series = series
-        rems = [float(x.get("remaining") or 0.0) for x in filtered_series]
-        maxv = max(rems) if rems else 1.0
-        maxv = max(maxv, 1.0)
-        n = len(filtered_series)
-        def _get_date(i: int) -> Optional[str]:
-            d = filtered_series[i].get("date") or filtered_series[i].get("day") or filtered_series[i].get("time")
-            return fmt_date(str(d)) if d else None
-        def pt(idx: int, val: float) -> Tuple[int, int]:
-            if n <= 1:
-                t = 0.0
-            else:
-                t = idx / (n - 1)
-            X = int((gx0 + pad_left) + t * (w - pad_left - pad_right))
-            Y = int((gy1 - pad_bottom) - (val / maxv) * (h - pad_top - pad_bottom))
-            return X, Y
-        # ideal dotted (legend: gray dotted); compute when missing
-        if not ideal and n >= 2:
-            start_rem = rems[0]
-            ideal = [{"remaining": start_rem * (1 - i / (n - 1))} for i in range(n)]
-        # build points
-        pts_i = [pt(i, float(v.get("remaining") or 0.0)) for i, v in enumerate(ideal[:n])] if ideal else []
-        pts = [pt(i, float(v.get("remaining") or 0.0)) for i, v in enumerate(filtered_series)]
-        # shade gap between ideal and actual (red when behind => actual above ideal)
-        if pts_i and pts and len(pts) == len(pts_i):
-            for i in range(1, len(pts)):
-                ax0, ay0 = pts[i-1]
-                ax1, ay1 = pts[i]
-                ix0, iy0 = pts_i[i-1]
-                ix1, iy1 = pts_i[i]
-                # vertical quads per segment
-                poly = [(ax0, ay0), (ax1, ay1), (ix1, iy1), (ix0, iy0)]
-                # determine if behind (actual remaining > ideal -> higher Y)
-                behind = ((ay0 + ay1) / 2.0) > ((iy0 + iy1) / 2.0)
-                shade = (255, 200, 200, 128) if behind else (200, 240, 200, 128)
-                try:
-                    # use separate overlay for alpha
-                    overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-                    og = ImageDraw.Draw(overlay)
-                    og.polygon([(px - gx0, py - gy0) for (px, py) in poly], fill=shade, outline=None)
-                    img.paste(overlay, (gx0, gy0), overlay)
-                except Exception:
-                    pass
-        # draw ideal dotted
-        if pts_i:
-            for i in range(1, len(pts_i)):
-                if i % 2 == 0:
-                    g.line([pts_i[i-1], pts_i[i]], fill=(120, 120, 120), width=2)
-        # actual solid
-        for i in range(1, len(pts)):
-            g.line([pts[i-1], pts[i]], fill=(0, 120, 210), width=3)
-        # Title and its bbox for collision checks
-        title_pos = (gx0 + pad_left, gy0 + 2)  # 上部余白内にタイトルを描画
-        title_txt = "バーンダウン（未完了タスク推移）"
-        g.text(title_pos, title_txt, font=font_md, fill=col_text)
-        try:
-            title_bb = g.textbbox(title_pos, title_txt, font=font_md)
-        except Exception:
-            title_bb = (title_pos[0], title_pos[1], title_pos[0] + int(g.textlength(title_txt, font=font_md)), title_pos[1] + getattr(font_md, "size", 14))
-        # axis labels (Y ticks and X dates)
-        for frac in (0.0, 0.5, 1.0):
-            x = gx0 + pad_left
-            y = int((gy1 - pad_bottom) - frac * (h - pad_top - pad_bottom))
-            g.line([x - 4, y, x + 4, y], fill=col_outline)
-            val = int(round(maxv * frac))
-            g.text((x - 8 - g.textlength(str(val), font=font_sm), y - 6), str(val), font=font_sm, fill=col_text)
-        if n >= 2:
-            labels = [0, n // 2, n - 1]
-            for idx in labels:
-                lx, _ = pt(idx, 0)
-                dlab = _get_date(idx)
-                if dlab:
-                    g.text((lx - 10, gy1 - pad_bottom + 2), dlab, font=font_sm, fill=col_text)
-        # latest remaining label
-        try:
-            if pts:
-                last_val = float(filtered_series[-1].get("remaining") or 0.0)
-                lx, ly = pts[-1]
-                lbl = f"残: {last_val:.1f}"
-                g.text((lx + 6, ly - 10), lbl, font=font_sm, fill=(0, 120, 210))
-        except Exception:
-            pass
-        # forecast: simple linear regression on (i, remaining) -> predict zero
-        try:
-            import statistics as _stats
-            xs = list(range(n))
-            ys = rems
-            # compute slope and intercept
-            x_mean = sum(xs) / n
-            y_mean = sum(ys) / n
-            denom = sum((x - x_mean) ** 2 for x in xs) or 1.0
-            slope = sum((x - x_mean) * (y - y_mean) for x, y in zip(xs, ys)) / denom
-            intercept = y_mean - slope * x_mean
-            # predict index where remaining ~ 0
-            if slope < 0:
-                t0 = -intercept / slope
-            else:
-                t0 = float('inf')
-            # draw dashed forecast line from last index to t0
-            if t0 != float('inf'):
-                # sample M points between last and t0 (clamped)
-                start = n - 1
-                M = 20
-                prev = None
-                for j in range(M + 1):
-                    t = start + (t0 - start) * (j / M)
-                    yv = max(0.0, slope * t + intercept)
-                    px, py = pt(int(round(t)), yv)
-                    if prev is not None and j % 2 == 0:
-                        g.line([prev, (px, py)], fill=(120, 0, 160), width=2)
-                    prev = (px, py)
-                # label predicted date and delay
-                from datetime import datetime, timedelta
-                # try to parse last date
-                last_date_raw = series[-1].get("date") or series[-1].get("day") or series[-1].get("time")
-                if last_date_raw and t0 != float('inf'):
-                    try:
-                        # assume daily cadence
-                        base = datetime.strptime(str(series[0].get("date")), "%Y-%m-%d") if series[0].get("date") else datetime.today()
-                        pred_date = base + timedelta(days=int(round(t0)))
-                        status = "遅延予測" if t0 > (n - 1) else "間に合う予測"
-                        pred_txt = f"予測完了: {pred_date.strftime('%Y/%m/%d')} ({status})"
-                        pred_pos = (gx0 + pad + 2, gy0 + 2)
-                        # Avoid overlapping title; if intersect, move below title
-                        try:
-                            pred_bb = g.textbbox(pred_pos, pred_txt, font=font_sm)
-                        except Exception:
-                            pred_bb = (pred_pos[0], pred_pos[1], pred_pos[0] + int(g.textlength(pred_txt, font=font_sm)), pred_pos[1] + getattr(font_sm, "size", 12))
-                        def _inter(a, b):
-                            ax0, ay0, ax1, ay1 = a
-                            bx0, by0, bx1, by1 = b
-                            return not (ax1 < bx0 or bx1 < ax0 or ay1 < by0 or by1 < ay0)
-                        if _inter(title_bb, pred_bb):
-                            g.text((gx0 + pad + 2, title_bb[3] + 2), pred_txt, font=font_sm, fill=(120, 0, 160))
-                        else:
-                            g.text(pred_pos, pred_txt, font=font_sm, fill=(120, 0, 160))
-                    except Exception:
-                        alt_txt = "予測完了: 計算不可"
-                        alt_pos = (gx0 + pad + 2, gy0 + 2)
-                        try:
-                            alt_bb = g.textbbox(alt_pos, alt_txt, font=font_sm)
-                        except Exception:
-                            alt_bb = (alt_pos[0], alt_pos[1], alt_pos[0] + int(g.textlength(alt_txt, font=font_sm)), alt_pos[1] + getattr(font_sm, "size", 12))
-                        if not (alt_bb[1] < title_bb[3] and alt_bb[3] > title_bb[1] and alt_bb[2] > title_bb[0] and alt_bb[0] < title_bb[2]):
-                            g.text(alt_pos, alt_txt, font=font_sm, fill=(120, 0, 160))
-                        else:
-                            g.text((gx0 + pad + 2, title_bb[3] + 2), alt_txt, font=font_sm, fill=(120, 0, 160))
-        except Exception:
-            pass
-
-    # Position burndown and mini velocity side-by-side in header right
-    bd_box_x0 = proj_x1 + 12
+    # 右ヘッダー領域をミニVelocity専用に利用
+    velmini_box_x0 = proj_x1 + 12
+    velmini_box_w = header_right_w
     bd_box_y0 = padding
     bd_box_h = 110
-    bd_box_w = header_right_w // 2 - 6
-    velmini_box_x0 = bd_box_x0 + bd_box_w + 12
-    velmini_box_w = header_right_w - bd_box_w - 12
-    bd_data = (extras or {}).get("burndown") if extras else None
-    draw_burndown_sparkline(bd_box_x0, bd_box_y0, bd_box_w, bd_box_h, bd_data)
     # mini velocity chart (reserved_h is dynamic based on KPI text height)
     def draw_velocity_mini(x0: int, y0: int, w: int, h: int, vel: Optional[Dict[str, Any]], reserved_h: int) -> None:
         # Apply adapter to handle both new and old velocity formats
@@ -1847,7 +1665,7 @@ def draw_png(
     tis_y1 = draw_time_in_status_heatmap(left_col_x0, tis_box_y0, left_col_w, tis_box_h, tis_data)
 
     # Right column: KPI cards and Assignee workload
-    right_x0 = bd_box_x0
+    right_x0 = velmini_box_x0
     right_y0 = bd_box_y0 + bd_box_h + 16
     right_w = header_right_w
 
@@ -2087,25 +1905,8 @@ def draw_png(
             target_remaining = max(0, int(target_done_rate * sprint_total) - sprint_done)
             required_daily_burn = math.ceil(target_remaining / remaining_days) if target_remaining > 0 else 0
         
-        # 実績日次消化数（直近3日の平均）
+        # 実績日次消化数（Burndown廃止により算出不可）
         actual_daily_burn = None
-        burndown_data = (extras or {}).get("burndown") if extras else None
-        if burndown_data:
-            time_series = burndown_data.get("timeSeries", [])
-            if len(time_series) >= 4:  # 最低4日分のデータが必要
-                try:
-                    burn_lookback_days = int(os.getenv("BURN_LOOKBACK_DAYS", "3"))
-                    recent_series = time_series[-burn_lookback_days-1:]  # 最新N+1日分
-                    if len(recent_series) >= 2:
-                        total_burned = 0.0
-                        for i in range(len(recent_series) - 1):
-                            prev_remaining = float(recent_series[i].get("remaining", 0.0))
-                            curr_remaining = float(recent_series[i+1].get("remaining", 0.0))
-                            daily_burn = max(0.0, prev_remaining - curr_remaining)
-                            total_burned += daily_burn
-                        actual_daily_burn = total_burned / max(1, len(recent_series) - 1)
-                except Exception:
-                    actual_daily_burn = None
         
         # ボトルネック工程の特定
         bottleneck_status = None
@@ -2177,7 +1978,12 @@ def draw_png(
     _log_on = (os.getenv("DASHBOARD_LOG", "1").lower() in ("1", "true", "yes"))
     _gemini_disabled = os.getenv("GEMINI_DISABLE", "").lower() in ("1", "true", "yes")
     ai = None
-    if gemini_key and not _gemini_disabled and genai is not None:
+    existing_ai_text = extras.get("ai_full_text") if isinstance(extras, dict) else None
+    if existing_ai_text:
+        ai = existing_ai_text
+        if _log_on:
+            print("- AI要約: Phase5生成テキストを再利用")
+    elif gemini_key and not _gemini_disabled and genai is not None:
         if GEMINI_DEBUG and _log_on:
             masked = f"{gemini_key[:4]}...{gemini_key[-4:]}" if len(gemini_key) >= 8 else "(set)"
             if raw_key and raw_key != gemini_key:
@@ -2393,12 +2199,6 @@ def main_legacy() -> int:
         target_done_rate = 0.8
     # Fetch extra metrics for dashboard
     extras: Dict[str, Any] = {}
-    try:
-        # A. Burndown
-        bd_args = ["--unit", BURNDOWN_UNIT]
-        extras["burndown"] = get_json_from_script_args(str(base_dir / "queries" / "jira_q_burndown.py"), bd_args)
-    except Exception:
-        extras["burndown"] = None
     try:
         # B. Velocity
         vel_args: List[str] = []
@@ -2642,18 +2442,6 @@ def main_legacy() -> int:
                 print(f"- 小タスク: 合計 {int(totals.get('subtasks', 0))}, 完了 {int(totals.get('done', 0))}, 未完了 {int(totals.get('subtasks', 0)) - int(totals.get('done', 0))}")
             except Exception:
                 pass
-            # Burndown
-            bd = extras.get("burndown")
-            if isinstance(bd, dict):
-                try:
-                    ts = bd.get("timeSeries") or []
-                    first = float((ts[0] or {}).get("remaining", 0.0)) if ts else 0.0
-                    last = float((ts[-1] or {}).get("remaining", 0.0)) if ts else 0.0
-                    print(f"- Burndown: unit={bd.get('unit')}, total={bd.get('total')}, days={len(ts)}, 残(始→終) {first:.1f}→{last:.1f}")
-                except Exception:
-                    print("- Burndown: 取得失敗またはデータなし")
-            else:
-                print("- Burndown: データなし")
             # Velocity
             vel = extras.get("velocity")
             if isinstance(vel, dict):

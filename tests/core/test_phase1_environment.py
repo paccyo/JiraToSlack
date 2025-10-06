@@ -44,7 +44,6 @@ class TestEnvironmentConfig:
         assert config is not None
         assert config.target_done_rate == 0.8
         assert config.axis_mode == "percent"
-        assert config.burndown_unit == "days"
         assert config.n_sprints == "6"
     
     def test_from_env_with_custom_values(self, monkeypatch):

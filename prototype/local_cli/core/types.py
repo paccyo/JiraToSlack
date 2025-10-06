@@ -17,7 +17,6 @@ class EnvironmentConfig:
     # オプション設定
     jira_board_id: Optional[str] = None
     jira_project_key: Optional[str] = None
-    burndown_unit: str = "days"
     n_sprints: str = "6"
     status_counts_mode: str = "approx"
     tis_unit: str = "days"
@@ -86,7 +85,6 @@ class EnvironmentConfig:
             axis_mode=axis_mode,
             jira_board_id=os.getenv("JIRA_BOARD_ID"),
             jira_project_key=os.getenv("JIRA_PROJECT_KEY"),
-            burndown_unit=os.getenv("BURNDOWN_UNIT", "days"),
             n_sprints=os.getenv("N_SPRINTS", "6"),
             status_counts_mode=os.getenv("STATUS_COUNTS_MODE", "approx"),
             tis_unit=os.getenv("TIS_UNIT", "days"),
@@ -309,7 +307,6 @@ class CoreData:
 @dataclass
 class MetricsCollection:
     """全メトリクスを保持"""
-    burndown: Optional[Dict[str, Any]] = None
     velocity: Optional[Dict[str, Any]] = None
     project_sprint_count: Optional[Dict[str, Any]] = None
     status_counts: Optional[Dict[str, Any]] = None
@@ -324,7 +321,6 @@ class MetricsCollection:
     def to_dict(self) -> Dict[str, Any]:
         """extras辞書形式に変換（既存コードとの互換性）"""
         return {
-            "burndown": self.burndown,
             "velocity": self.velocity,
             "project_sprint_count": self.project_sprint_count,
             "status_counts": self.status_counts,

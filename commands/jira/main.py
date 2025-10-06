@@ -74,9 +74,6 @@ class CommandJiraRepository:
         def script(name: str) -> Path:
             return (self._queries_dir / name).resolve()
 
-        def burndown_args(_: "CommandJiraRepository") -> List[str]:
-            unit = os.getenv("BURNDOWN_UNIT", "issues")
-            return ["--unit", unit]
 
         def velocity_args(_: "CommandJiraRepository") -> List[str]:
             n_sprints = os.getenv("N_SPRINTS", "6").strip()
@@ -107,12 +104,6 @@ class CommandJiraRepository:
                 key="subtasks",
                 script=script("jira_list_sprint_subtasks.py"),
                 description="アクティブスプリントの親子タスク一覧",
-            ),
-            "burndown": QueryDefinition(
-                key="burndown",
-                script=script("jira_q_burndown.py"),
-                description="バーンダウンデータ",
-                args_builder=burndown_args,
             ),
             "velocity": QueryDefinition(
                 key="velocity",
@@ -234,7 +225,7 @@ class CommandJiraRepository:
         lines = [
             "*Jira query data test*",
             "`/jira <query>` でダッシュボード用クエリを個別に実行し、結果をJSONで確認できます。",
-            "例: `/jira burndown` / `/jira run status_counts` / `/jira all`",
+            "例: `/jira velocity` / `/jira run status_counts` / `/jira all`",
             "",
             "*利用可能なクエリ:*",
         ]

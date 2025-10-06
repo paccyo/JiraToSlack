@@ -29,18 +29,6 @@ def test_main_generates_outputs(monkeypatch, temp_output_dir):
 
     def fake_get_json_from_script_args(script_path, args, env_extra=None):
         name = Path(script_path).name
-        if name == "jira_q_burndown.py":
-            return {
-                "unit": "issues",
-                "total": 3,
-                "timeSeries": [
-                    {"date": "2025-09-01", "remaining": 3},
-                    {"date": "2025-09-02", "remaining": 2},
-                    {"date": "2025-09-03", "remaining": 2},
-                    {"date": "2025-09-04", "remaining": 1},
-                ],
-                "ideal": []
-            }
         if name == "jira_q_velocity_history.py":
             return {
                 "board": {"id": 1, "name": "Board"},

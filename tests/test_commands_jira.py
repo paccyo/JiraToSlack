@@ -40,7 +40,6 @@ def test_help_lists_queries(repo):
     _, repository = repo
     message = repository.execute("")
     assert "利用可能なクエリ" in message
-    assert "`burndown`" in message
 
 
 def test_unknown_alias(repo):
@@ -66,13 +65,6 @@ def test_run_all_summary(repo):
     _, repository = repo
     message = repository.execute("all")
     assert "Query test summary" in message
-    assert "`burndown`" in message
     assert "`due_soon`" in message
 
 
-def test_run_command_prefix(repo):
-    recorder, repository = repo
-    repository.execute("run burndown")
-    kind, script_name, args = recorder.calls[-1]
-    assert kind == "args"
-    assert script_name == "jira_q_burndown.py"

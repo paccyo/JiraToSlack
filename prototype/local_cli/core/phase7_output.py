@@ -227,12 +227,10 @@ def export_metrics_json(
             "doneRate": core_data.totals.completion_rate,
             "targetDoneRate": config.target_done_rate,
             "axis": config.axis_mode,
-            "velocity": metrics.velocity,  # 新規追加
-            "burndown": metrics.burndown,  # 新規追加
-            "evidence": metrics.evidence,  # 新規追加
+            "velocity": metrics.velocity,
+            "evidence": metrics.evidence,
             "assigneeWorkload": metrics.assignee_workload,
             "extrasAvailable": {
-                "burndown": metrics.burndown is not None,
                 "velocity": metrics.velocity is not None,
                 "status_counts": metrics.status_counts is not None,
                 "time_in_status": metrics.time_in_status is not None,

@@ -9,23 +9,6 @@ def _mk_url(domain, path):
     return f"{domain}{path}"
 
 
-@pytest.mark.usefixtures("fake_env")
-def test_burndown_query_mocks(monkeypatch):
-    # Monkeypatch JiraClient methods directly
-    sprint = {"id": 123, "name": "Sprint 1", "startDate": "2025-09-01T00:00:00+09:00", "endDate": "2025-09-05T00:00:00+09:00"}
-    monkeypatch.setattr(JiraClient, "resolve_board", lambda self: (200, {"id": 1, "name": "Board"}, ""), raising=True)
-    monkeypatch.setattr(JiraClient, "resolve_active_sprint", lambda self, board_id=None: (200, sprint, ""), raising=True)
-    monkeypatch.setattr(JiraClient, "resolve_story_points_field", lambda self: "customfield_10016", raising=True)
-    monkeypatch.setattr(JiraClient, "search_paginated", lambda self, jql, fields, batch=100: (200, [], ""), raising=True)
-    monkeypatch.setattr(JiraClient, "api_get", lambda self, url, params=None: (200, {}, ""), raising=True)
-
-    # import and run main
-    import importlib
-    import sys as _sys
-    mod = importlib.import_module("prototype.local_cli.queries.jira_q_burndown")
-    monkeypatch.setattr(_sys, 'argv', ['__main__.py'])
-    rc = mod.main()
-    assert rc == 0
 
 
 @pytest.mark.usefixtures("fake_env")
