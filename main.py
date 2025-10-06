@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from google.cloud import firestore
 import commands
 import actions
+import events
 
 import scheduler
 
@@ -35,6 +36,7 @@ app = App(
 db = firestore.Client()
 commands.register_commands(app)
 actions.register_actions(app)
+events.register_events(app)
 slack_handler = SlackRequestHandler(app)
 
 
