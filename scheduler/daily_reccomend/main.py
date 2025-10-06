@@ -5,7 +5,7 @@ from datetime import datetime, date
 
 from util.request_jira import RequestJiraRepository
 
-class SchedulerTaskHandler:
+class DailyTaskReccomendation:
     def execute(self, app, db, message_data):
         """
         Firestoreから全ユーザーを取得し、Slack DMを送信する

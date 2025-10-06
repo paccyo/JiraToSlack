@@ -10,7 +10,9 @@ from dotenv import load_dotenv
 from google.cloud import firestore
 import commands
 import actions
-from sheduler.main import SchedulerTaskHandler
+
+import scheduler
+
 
 # --- 環境変数の読み込みとチェック ---
 load_dotenv()
@@ -44,14 +46,13 @@ def handle_pubsub_message(data: dict):
         message_data = json.loads(message_data_str)
         print(f"Pub/Subからメッセージを受信しました: {message_data}")
 
-        if message_data.get("flag") == "execute_special_task":
-            # ロジックをSchedulerTaskHandlerに委譲
-            task_handler = SchedulerTaskHandler()
-            result = task_handler.execute(app, db, message_data)
-            print(result)
+
         
+        if message_data.get("flag") == "scheduler_events":
+            scheduler.schedule_handler(message_data, app, db)
         else:
             print("フラグが設定されていないか、値が異なります。")
+
 
         return "OK", 200
     except Exception as e:
