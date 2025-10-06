@@ -4,10 +4,355 @@
     "startDate": "2025-10-03T02:16:17.446Z",
     "endDate": "2025-10-10T02:16:41.000Z"
   },
-  "parents": [],
+  "parents": [
+    {
+      "key": "SCRUM-108",
+      "summary": "Slackデプロイ環境のデバック作業",
+      "assignee": null,
+      "subtasks": [
+        {
+          "key": "SCRUM-131",
+          "summary": "Slackデプロイ環境の設定確認",
+          "done": true,
+          "assignee": null,
+          "status": "完了",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:16:57.700+0900",
+          "startedAt": null,
+          "completedAt": "2025-10-06T10:17:07.799+0900"
+        },
+        {
+          "key": "SCRUM-134",
+          "summary": "Slackデプロイ環境の依存サービス確認",
+          "done": false,
+          "assignee": null,
+          "status": "pending",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:16:57.710+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-135",
+          "summary": "Slackデプロイ環境の修正案作成",
+          "done": false,
+          "assignee": null,
+          "status": "pending",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:16:57.712+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-132",
+          "summary": "Slackデプロイ環境の再現テスト実施",
+          "done": false,
+          "assignee": null,
+          "status": "pending",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:16:57.710+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-133",
+          "summary": "Slackデプロイ環境のエラーログ収集",
+          "done": false,
+          "assignee": null,
+          "status": "pending",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:16:57.711+0900",
+          "startedAt": null,
+          "completedAt": null
+        }
+      ]
+    },
+    {
+      "key": "SCRUM-109",
+      "summary": "バックログレポートのリファクタリング作業",
+      "assignee": null,
+      "subtasks": [
+        {
+          "key": "SCRUM-116",
+          "summary": "バックログレポートのコード構造の整理",
+          "done": true,
+          "assignee": "福聖",
+          "status": "完了",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:12:30.009+0900",
+          "startedAt": null,
+          "completedAt": "2025-10-06T10:14:59.689+0900"
+        },
+        {
+          "key": "SCRUM-117",
+          "summary": "既存バックログレポートコードの現状分析",
+          "done": true,
+          "assignee": "福聖",
+          "status": "完了",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:12:30.013+0900",
+          "startedAt": null,
+          "completedAt": "2025-10-06T10:15:02.637+0900"
+        },
+        {
+          "key": "SCRUM-118",
+          "summary": "不要なコードや重複処理の削除",
+          "done": true,
+          "assignee": "福聖",
+          "status": "完了",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:12:30.025+0900",
+          "startedAt": null,
+          "completedAt": "2025-10-06T10:15:06.646+0900"
+        },
+        {
+          "key": "SCRUM-119",
+          "summary": "リファクタリング後の動作確認テストの実施",
+          "done": false,
+          "assignee": "福聖",
+          "status": "IN_progress",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:12:30.042+0900",
+          "startedAt": "2025-10-06T10:15:09.414+0900",
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-120",
+          "summary": "リファクタリング内容のドキュメント作成",
+          "done": false,
+          "assignee": "福聖",
+          "status": "To Do",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:12:30.058+0900",
+          "startedAt": null,
+          "completedAt": null
+        }
+      ]
+    },
+    {
+      "key": "SCRUM-110",
+      "summary": "サブタスクのSlack表示実装",
+      "assignee": null,
+      "subtasks": [
+        {
+          "key": "SCRUM-126",
+          "summary": "サブタスク情報のSlackメッセージフォーマット設計",
+          "done": true,
+          "assignee": "sakiya sumida",
+          "status": "完了",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:15:26.865+0900",
+          "startedAt": "2025-10-06T10:15:32.134+0900",
+          "completedAt": "2025-10-06T10:16:00.461+0900"
+        },
+        {
+          "key": "SCRUM-125",
+          "summary": "サブタスク情報の取得ロジック実装",
+          "done": true,
+          "assignee": "sakiya sumida",
+          "status": "完了",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:15:26.865+0900",
+          "startedAt": "2025-10-06T10:15:34.247+0900",
+          "completedAt": "2025-10-06T10:16:03.885+0900"
+        },
+        {
+          "key": "SCRUM-128",
+          "summary": "エラーハンドリングと通知実装",
+          "done": true,
+          "assignee": "sakiya sumida",
+          "status": "完了",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:15:26.904+0900",
+          "startedAt": "2025-10-06T10:15:36.567+0900",
+          "completedAt": "2025-10-06T10:16:06.430+0900"
+        },
+        {
+          "key": "SCRUM-127",
+          "summary": "Slack API連携のセットアップ",
+          "done": false,
+          "assignee": "sakiya sumida",
+          "status": "IN_progress",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:15:26.903+0900",
+          "startedAt": "2025-10-06T10:16:08.912+0900",
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-129",
+          "summary": "Slackへのサブタスク情報送信機能実装",
+          "done": false,
+          "assignee": "sakiya sumida",
+          "status": "IN_progress",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:15:26.929+0900",
+          "startedAt": "2025-10-06T10:16:10.846+0900",
+          "completedAt": null
+        }
+      ]
+    },
+    {
+      "key": "SCRUM-111",
+      "summary": "TODOステータスの変更のデバック作業",
+      "assignee": null,
+      "subtasks": [
+        {
+          "key": "SCRUM-137",
+          "summary": "エラー発生箇所の特定",
+          "done": false,
+          "assignee": null,
+          "status": "pending",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:17:22.168+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-136",
+          "summary": "コードのデバッグ実施",
+          "done": false,
+          "assignee": null,
+          "status": "pending",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:17:22.170+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-139",
+          "summary": "ログの収集と分析",
+          "done": false,
+          "assignee": null,
+          "status": "pending",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:17:22.187+0900",
+          "startedAt": null,
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-138",
+          "summary": "修正内容の動作確認",
+          "done": false,
+          "assignee": null,
+          "status": "pending",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:17:22.188+0900",
+          "startedAt": null,
+          "completedAt": null
+        }
+      ]
+    },
+    {
+      "key": "SCRUM-112",
+      "summary": "やること",
+      "assignee": null,
+      "subtasks": [
+        {
+          "key": "SCRUM-130",
+          "summary": "やること",
+          "done": false,
+          "assignee": "福聖",
+          "status": "To Do",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:16:30.730+0900",
+          "startedAt": null,
+          "completedAt": null
+        }
+      ]
+    },
+    {
+      "key": "SCRUM-113",
+      "summary": "レビュー",
+      "assignee": null,
+      "subtasks": [
+        {
+          "key": "SCRUM-124",
+          "summary": "ドキュメントの内容確認",
+          "done": false,
+          "assignee": "福聖",
+          "status": "IN_progress",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:13:45.701+0900",
+          "startedAt": "2025-10-06T10:13:55.876+0900",
+          "completedAt": null
+        },
+        {
+          "key": "SCRUM-123",
+          "summary": "フィードバックの作成",
+          "done": false,
+          "assignee": "福聖",
+          "status": "IN_progress",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:13:45.700+0900",
+          "startedAt": "2025-10-06T10:13:58.121+0900",
+          "completedAt": null
+        }
+      ]
+    },
+    {
+      "key": "SCRUM-114",
+      "summary": "やめた",
+      "assignee": null,
+      "subtasks": [
+        {
+          "key": "SCRUM-122",
+          "summary": "やめた",
+          "done": true,
+          "assignee": "福聖",
+          "status": "完了",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:13:16.295+0900",
+          "startedAt": null,
+          "completedAt": "2025-10-06T10:13:21.051+0900"
+        }
+      ]
+    },
+    {
+      "key": "SCRUM-115",
+      "summary": "完了",
+      "assignee": null,
+      "subtasks": [
+        {
+          "key": "SCRUM-121",
+          "summary": "完了",
+          "done": true,
+          "assignee": "福聖",
+          "status": "完了",
+          "priority": "Medium",
+          "storyPoints": 1.0,
+          "created": "2025-10-06T10:12:49.332+0900",
+          "startedAt": null,
+          "completedAt": "2025-10-06T10:12:58.530+0900"
+        }
+      ]
+    }
+  ],
   "totals": {
-    "subtasks": 0,
-    "done": 0,
-    "notDone": 0
+    "subtasks": 24,
+    "done": 9,
+    "notDone": 15
   }
 }

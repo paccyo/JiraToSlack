@@ -5,18 +5,160 @@
     "endDate": "2025-10-10T02:16:41.000Z"
   },
   "totals": {
-    "subtasks": 0,
-    "done": 0,
-    "notDone": 0
+    "subtasks": 24,
+    "done": 9,
+    "notDone": 15
   },
-  "doneRate": 0.0,
+  "doneRate": 0.375,
   "targetDoneRate": 0.8,
   "axis": "percent",
+  "velocity": {
+    "plannedSP": 24.0,
+    "completedSP": 9.0,
+    "completionRate": 0.375,
+    "byAssignee": {
+      "(未割り当て)": {
+        "plannedSP": 9.0,
+        "completedSP": 1.0,
+        "completionRate": 0.1111111111111111
+      },
+      "福聖": {
+        "plannedSP": 10.0,
+        "completedSP": 5.0,
+        "completionRate": 0.5
+      },
+      "sakiya sumida": {
+        "plannedSP": 5.0,
+        "completedSP": 3.0,
+        "completionRate": 0.6
+      }
+    },
+    "historical": {
+      "sampleCount": 3,
+      "averageCompletedSP": 6.33,
+      "averagePlannedSP": 6.33,
+      "samples": [
+        {
+          "sprintId": 100,
+          "name": "SCRUM スプリント 4",
+          "plannedSP": 12.0,
+          "completedSP": 12.0,
+          "rate": 1.0
+        },
+        {
+          "sprintId": 34,
+          "name": "SCRUM スプリント 2",
+          "plannedSP": 1.0,
+          "completedSP": 1.0,
+          "rate": 1.0
+        },
+        {
+          "sprintId": 1,
+          "name": "SCRUM スプリント 1",
+          "plannedSP": 6.0,
+          "completedSP": 6.0,
+          "rate": 1.0
+        }
+      ]
+    }
+  },
+  "burndown": {
+    "dates": [
+      "2025-10-03",
+      "2025-10-04",
+      "2025-10-05",
+      "2025-10-06",
+      "2025-10-07",
+      "2025-10-08",
+      "2025-10-09",
+      "2025-10-10"
+    ],
+    "remaining": [
+      24.0,
+      24.0,
+      24.0,
+      15.0,
+      15.0,
+      15.0,
+      15.0,
+      15.0
+    ],
+    "ideal": [
+      24.0,
+      20.57,
+      17.14,
+      13.71,
+      10.29,
+      6.86,
+      3.43,
+      0.0
+    ],
+    "plannedSP": 24.0,
+    "unit": "days"
+  },
+  "evidence": [
+    {
+      "type": "unassigned",
+      "key": "SCRUM-134",
+      "summary": "Slackデプロイ環境の依存サービス確認",
+      "priority": "Medium",
+      "assignee": "(未割り当て)"
+    },
+    {
+      "type": "unassigned",
+      "key": "SCRUM-135",
+      "summary": "Slackデプロイ環境の修正案作成",
+      "priority": "Medium",
+      "assignee": "(未割り当て)"
+    },
+    {
+      "type": "unassigned",
+      "key": "SCRUM-132",
+      "summary": "Slackデプロイ環境の再現テスト実施",
+      "priority": "Medium",
+      "assignee": "(未割り当て)"
+    },
+    {
+      "type": "unassigned",
+      "key": "SCRUM-133",
+      "summary": "Slackデプロイ環境のエラーログ収集",
+      "priority": "Medium",
+      "assignee": "(未割り当て)"
+    },
+    {
+      "type": "unassigned",
+      "key": "SCRUM-137",
+      "summary": "エラー発生箇所の特定",
+      "priority": "Medium",
+      "assignee": "(未割り当て)"
+    }
+  ],
+  "assigneeWorkload": {
+    "(未割り当て)": {
+      "assignee": "(未割り当て)",
+      "subtasks": 9,
+      "done": 1,
+      "storyPoints": 9.0
+    },
+    "福聖": {
+      "assignee": "福聖",
+      "subtasks": 10,
+      "done": 5,
+      "storyPoints": 10.0
+    },
+    "sakiya sumida": {
+      "assignee": "sakiya sumida",
+      "subtasks": 5,
+      "done": 3,
+      "storyPoints": 5.0
+    }
+  },
   "extrasAvailable": {
-    "burndown": false,
-    "velocity": false,
+    "burndown": true,
+    "velocity": true,
     "status_counts": false,
     "time_in_status": false,
-    "workload": false
+    "workload": false,
+    "evidence": true
   }
 }

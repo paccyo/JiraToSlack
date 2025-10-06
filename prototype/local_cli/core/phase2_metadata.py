@@ -39,7 +39,7 @@ def fetch_jira_metadata(
         MetadataError: メタデータ取得に失敗した場合
     """
     if enable_logging:
-        logger.info("Phase 2: Jiraメタデータ取得を開始します")
+        logger.info("[Phase 2] Jiraメタデータ取得を開始します")
     
     try:
         # JiraClientを初期化
@@ -52,7 +52,7 @@ def fetch_jira_metadata(
         
         board = _extract_board_metadata(board_data)
         if enable_logging:
-            logger.info(f"ボード解決成功: {board.name} (ID: {board.board_id}, Type: {board.board_type})")
+            logger.info(f"[Phase 2] ボード解決成功: {board.name} (ID: {board.board_id}, Type: {board.board_type})")
         
         # アクティブスプリント解決
         sprint_code, sprint_data, sprint_error = client.resolve_active_sprint(board.board_id)
@@ -61,7 +61,7 @@ def fetch_jira_metadata(
         
         sprint = _extract_sprint_metadata(sprint_data)
         if enable_logging:
-            logger.info(f"スプリント解決成功: {sprint.name} (ID: {sprint.sprint_id}, State: {sprint.state})")
+            logger.info(f"[Phase 2] スプリント解決成功: {sprint.name} (ID: {sprint.sprint_id}, State: {sprint.state})")
         
         # プロジェクトキー解決
         project_key = client.resolve_project_key()
@@ -72,12 +72,12 @@ def fetch_jira_metadata(
                 raise MetadataError("プロジェクトキーの解決に失敗しました")
         
         if enable_logging:
-            logger.info(f"プロジェクトキー解決成功: {project_key}")
+            logger.info(f"[Phase 2] プロジェクトキー解決成功: {project_key}")
         
         # ストーリーポイントフィールドを解決
         story_points_field = client.resolve_story_points_field()
         if enable_logging:
-            logger.info(f"ストーリーポイントフィールド: {story_points_field}")
+            logger.info(f"[Phase 2] ストーリーポイントフィールド: {story_points_field}")
         
         metadata = JiraMetadata(
             board=board,
@@ -87,7 +87,7 @@ def fetch_jira_metadata(
         )
         
         if enable_logging:
-            logger.info("Phase 2: Jiraメタデータ取得が完了しました")
+            logger.info("[Phase 2] Jiraメタデータ取得が完了しました")
         
         return metadata
         

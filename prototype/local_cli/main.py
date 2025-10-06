@@ -1584,6 +1584,51 @@ def draw_png(
         if "points" in vel and "avgPoints" in vel:
             return vel
         
+        # New metrics format: current sprint summary + historical samples
+        hist_block = vel.get("historical") if isinstance(vel, dict) else None
+        if isinstance(hist_block, dict):
+            samples = hist_block.get("samples") or []
+            points: List[Dict[str, Any]] = []
+            for sample in samples:
+                completed = sample.get("completedSP", 0.0)
+                try:
+                    completed_val = float(completed)
+                except Exception:
+                    completed_val = 0.0
+                entry = {
+                    "points": completed_val,
+                    "sprintId": sample.get("sprintId"),
+                    "sprintName": sample.get("name"),
+                    "planned": sample.get("plannedSP"),
+                    "rate": sample.get("rate"),
+                }
+                points.append(entry)
+
+            # Optionally include current sprint as the first item if not already present
+            if not points:
+                try:
+                    current_points = float(vel.get("completedSP", 0.0))
+                except Exception:
+                    current_points = 0.0
+                points.append({
+                    "points": current_points,
+                    "sprintId": None,
+                    "sprintName": vel.get("currentSprintName") or "Current Sprint",
+                    "planned": vel.get("plannedSP"),
+                    "rate": vel.get("completionRate"),
+                })
+
+            avg_completed = hist_block.get("averageCompletedSP")
+            try:
+                avg_points = float(avg_completed)
+            except Exception:
+                avg_points = 0.0
+
+            return {
+                "points": points,
+                "avgPoints": avg_points,
+            }
+
         # Convert new format to old format
         if "history" in vel and "avg" in vel:
             points = []

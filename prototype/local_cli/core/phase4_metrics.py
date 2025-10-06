@@ -55,7 +55,7 @@ def collect_metrics(
         MetricsError: メトリクス収集に失敗した場合
     """
     if enable_logging:
-        logger.info("Phase 4: メトリクス収集を開始します")
+        logger.info("[Phase 4] メトリクス収集を開始します")
     
     try:
         try:
@@ -70,17 +70,69 @@ def collect_metrics(
         queries = _build_metric_queries(sprint_id, project_key)
         
         if enable_logging:
-            logger.info(f"{len(queries)} 個のメトリクスクエリを並列実行します")
+            logger.info(f"[Phase 4] {len(queries)} 個のメトリクスクエリを並列実行します")
         
         # 並列実行
         results = _execute_queries_parallel(client, queries, enable_logging)
         
         # 結果を集約
         metrics = _aggregate_metrics(results, core_data)
+
+        # 追加: Velocity / Burndown / Evidence
+        try:
+            velocity = _calculate_velocity(core_data)
+            metrics.velocity = velocity
+            if enable_logging:
+                logger.info(f"[Phase 4] Velocity: completed {velocity['completedSP']} / planned {velocity['plannedSP']} SP ({int(velocity['completionRate']*100)}%)")
+        except Exception as ve:  # pragma: no cover (安全バリア)
+            logger.warning(f"Velocity計算でエラー: {ve}")
+
+        # 歴史的ベロシティ（過去スプリント平均）
+        try:
+            # 環境変数でサンプル数制御
+            import os
+            hv_sample_limit_raw = os.getenv("HISTORICAL_VELOCITY_SAMPLE_LIMIT", "6")
+            try:
+                hv_sample_limit = max(1, min(20, int(hv_sample_limit_raw)))
+            except ValueError:
+                hv_sample_limit = 6
+            hist = _calculate_historical_velocity(
+                client,
+                metadata.board.board_id,
+                metadata.story_points_field,
+                sample_limit=hv_sample_limit,
+                enable_logging=enable_logging
+            )
+            if hist and metrics.velocity is not None:
+                metrics.velocity["historical"] = hist
+                if enable_logging:
+                    logger.info(
+                        f"[Phase 4] Historical Velocity: avgCompletedSP={hist['averageCompletedSP']} avgPlannedSP={hist.get('averagePlannedSP')} (samples={hist['sampleCount']})"
+                    )
+            elif enable_logging:
+                logger.warning("[Phase 4] Historical Velocity: サンプルが取得できませんでした (フォールバック無効)")
+        except Exception as hve:  # pragma: no cover
+            logger.warning(f"Historical Velocity計算でエラー: {hve}")
+
+        try:
+            burndown = _calculate_burndown(core_data, metadata)
+            metrics.burndown = burndown
+            if burndown and enable_logging:
+                logger.info(f"[Phase 4] Burndown points: {len(burndown['dates'])} days, start={burndown['remaining'][0]} end={burndown['remaining'][-1]}")
+        except Exception as be:  # pragma: no cover
+            logger.warning(f"Burndown計算でエラー: {be}")
+
+        try:
+            evidence = _extract_evidence(core_data, results, metadata, top_n=5)
+            metrics.evidence = evidence
+            if enable_logging and evidence:
+                logger.info(f"[Phase 4] Evidence抽出 {len(evidence)} 件")
+        except Exception as ee:  # pragma: no cover
+            logger.warning(f"Evidence抽出でエラー: {ee}")
         
         if enable_logging:
-            logger.info("Phase 4: メトリクス収集が完了しました")
-            logger.info(f"収集したメトリクス: {len(results)} 件")
+            logger.info("[Phase 4] メトリクス収集が完了しました")
+            logger.info(f"[Phase 4] 収集したメトリクス: {len(results)} 件")
         
         return metrics
         
@@ -289,6 +341,300 @@ def _aggregate_metrics(
     )
 
 
+def _normalize_story_points(value: Any, default_if_missing: float = 1.0) -> float:
+    """Story Points を正規化する。未設定(None/非数値)は default_if_missing を返す。"""
+    sp: float
+    if isinstance(value, (int, float)):
+        sp = float(value)
+    elif value is None:
+        sp = default_if_missing
+    else:
+        try:
+            sp = float(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            sp = default_if_missing
+    if sp < 0:
+        return 0.0
+    return sp
+
+
+def _fetch_sprint_issues(
+    client: "JiraClient",
+    sprint_id: int,
+    story_points_field: str,
+    batch: int = 100,
+) -> tuple[int, List[Dict[str, Any]], str]:
+    """Agile API を用いてスプリント内の課題一覧を取得する。"""
+    all_issues: List[Dict[str, Any]] = []
+    start_at = 0
+    last_error = ""
+    while True:
+        params = {
+            "startAt": start_at,
+            "maxResults": batch,
+            "fields": f"status,{story_points_field}",
+        }
+        code, data, err = client.api_get(
+            f"{client.domain}/rest/agile/1.0/sprint/{sprint_id}/issue",
+            params=params,
+        )
+        if code != 200 or not isinstance(data, dict):
+            return code, all_issues, err
+        issues = data.get("issues") or []
+        all_issues.extend(issues)
+        total = data.get("total")
+        if total is not None:
+            if len(all_issues) >= total:
+                break
+        else:
+            if not issues or len(issues) < batch:
+                break
+        start_at += batch
+        last_error = err
+    return 200, all_issues, last_error
+
+
+def _calculate_velocity(core_data: CoreData) -> Dict[str, Any]:
+    """Velocity(ストーリーポイント)を計算する。"""
+    planned = 0.0
+    completed = 0.0
+    by_assignee: Dict[str, Dict[str, float]] = {}
+    for parent in core_data.parents:
+        for st in parent.subtasks:
+            sp = _normalize_story_points(st.story_points)
+            planned += sp
+            assignee = st.assignee or "(未割り当て)"
+            if assignee not in by_assignee:
+                by_assignee[assignee] = {"plannedSP": 0.0, "completedSP": 0.0}
+            by_assignee[assignee]["plannedSP"] += sp
+            if st.done:
+                completed += sp
+                by_assignee[assignee]["completedSP"] += sp
+    completion_rate = completed / planned if planned > 0 else 0.0
+    return {
+        "plannedSP": round(planned, 2),
+        "completedSP": round(completed, 2),
+        "completionRate": completion_rate,
+        "byAssignee": {
+            k: {
+                "plannedSP": round(v["plannedSP"], 2),
+                "completedSP": round(v["completedSP"], 2),
+                "completionRate": (v["completedSP"] / v["plannedSP"] if v["plannedSP"] > 0 else 0.0)
+            }
+            for k, v in by_assignee.items()
+        }
+    }
+
+
+def _calculate_burndown(core_data: CoreData, metadata: JiraMetadata) -> Optional[Dict[str, Any]]:
+    """Burndownデータを生成する。"""
+    import datetime as dt
+    start = metadata.sprint.sprint_start
+    end = metadata.sprint.sprint_end
+    if not start or not end:
+        return None
+    try:
+        start_dt = dt.datetime.fromisoformat(start.replace("Z", "+00:00")).date()
+        end_dt = dt.datetime.fromisoformat(end.replace("Z", "+00:00")).date()
+    except Exception:
+        return None
+    if end_dt < start_dt:
+        return None
+    days: List[dt.date] = []
+    cur = start_dt
+    while cur <= end_dt:
+        days.append(cur)
+        cur += dt.timedelta(days=1)
+    # planned
+    planned = 0.0
+    completions: List[tuple[dt.date, float]] = []
+    for parent in core_data.parents:
+        for st in parent.subtasks:
+            sp = _normalize_story_points(st.story_points)
+            planned += sp
+            if st.completed_at:
+                try:
+                    cdate = dt.datetime.fromisoformat(st.completed_at.replace("Z", "+00:00")).date()
+                    completions.append((cdate, sp))
+                except Exception:
+                    pass
+    if planned <= 0:
+        return None
+    remaining: List[float] = []
+    remaining_val = planned
+    for d in days:
+        # 当日までに完了したSPを差し引く
+        day_completed = sum(sp for cdate, sp in completions if cdate <= d)
+        remaining_val = max(0.0, planned - day_completed)
+        remaining.append(round(remaining_val, 2))
+    # Ideal line
+    total_days = len(days)
+    if total_days <= 1:
+        ideal = [planned, 0.0]
+    else:
+        step = planned / (total_days - 1)
+        ideal = [round(max(0.0, planned - step * i), 2) for i in range(total_days)]
+    return {
+        "dates": [d.isoformat() for d in days],
+        "remaining": remaining,
+        "ideal": ideal,
+        "plannedSP": round(planned, 2),
+        "unit": "days",
+    }
+
+
+def _extract_evidence(core_data: CoreData, query_results: Dict[str, int], metadata: JiraMetadata, top_n: int = 5) -> Optional[List[Dict[str, Any]]]:
+    """重要エビデンスを抽出（簡易版）。"""
+    evidence: List[Dict[str, Any]] = []
+    # 高優先度未完了
+    high_priority_set = {p.strip().lower() for p in (metadata.project_key and ["Highest", "High"] or ["High"]) if p}
+    for parent in core_data.parents:
+        for st in parent.subtasks:
+            if st.done:
+                continue
+            if st.priority and st.priority.strip().lower() in {"highest", "high"}:
+                evidence.append({
+                    "type": "highPriorityNotDone",
+                    "key": st.key,
+                    "summary": st.summary,
+                    "priority": st.priority,
+                    "assignee": st.assignee or "(未割り当て)"
+                })
+    # 未割り当て
+    for parent in core_data.parents:
+        for st in parent.subtasks:
+            if st.done:
+                continue
+            if not st.assignee:
+                evidence.append({
+                    "type": "unassigned",
+                    "key": st.key,
+                    "summary": st.summary,
+                    "priority": st.priority,
+                    "assignee": "(未割り当て)"
+                })
+    # 重複除去 (key,type) 単位
+    seen = set()
+    uniq: List[Dict[str, Any]] = []
+    for item in evidence:
+        sig = (item["type"], item["key"])
+        if sig in seen:
+            continue
+        seen.add(sig)
+        uniq.append(item)
+    if not uniq:
+        return None
+    return uniq[:top_n]
+
+
+def _calculate_historical_velocity(
+    client: "JiraClient",
+    board_id: int,
+    story_points_field: str,
+    sample_limit: int = 6,
+    enable_logging: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """プロジェクト内の全ての閉鎖済みスプリントを対象に、各スプリントの合計SP(全課題)と完了SPを集計し平均を算出する。
+
+    要件: フォールバックなし・サブタスク限定なし・純粋な closed sprint の平均。
+    出力: averageCompletedSP / averagePlannedSP / samples[{sprintId,name,completedSP,plannedSP,rate}]
+    """
+
+    def _is_done(status_field: Optional[Dict[str, Any]]) -> bool:
+        if not status_field:
+            return False
+        cat = (status_field or {}).get("statusCategory") or {}
+        return cat.get("key") == "done"
+
+    try:
+        if enable_logging:
+            logger.info("[Phase 4] Historical Velocity(ALL issues) 取得開始 board_id=%s sample_limit=%s", board_id, sample_limit)
+        code, data, err = client.api_get(
+            f"{client.domain}/rest/agile/1.0/board/{board_id}/sprint",
+            params={"state": "closed", "maxResults": 200},
+        )
+        if code != 200 or not data:
+            if enable_logging:
+                logger.warning("[Phase 4] Closed sprint list取得失敗 code=%s err=%s", code, err)
+            return None
+        values = data.get("values") or []
+        if not values:
+            if enable_logging:
+                logger.warning("[Phase 4] Closed sprint 0件")
+            return None
+        # 完了日時降順
+        try:
+            values.sort(key=lambda v: v.get("completeDate") or v.get("endDate") or "", reverse=True)
+        except Exception as se:
+            if enable_logging:
+                logger.warning("[Phase 4] sprint sort error: %s", se)
+        samples: List[Dict[str, Any]] = []
+        for idx, sp in enumerate(values):
+            if len(samples) >= sample_limit:
+                break
+            sid = sp.get("id")
+            if sid is None:
+                continue
+            sname = sp.get("name")
+            comp = sp.get("completeDate") or sp.get("endDate")
+            if enable_logging:
+                logger.info("[Phase 4] Sprint集計開始 id=%s name=%s complete=%s", sid, sname, comp)
+            fetch_code, issues, fetch_err = _fetch_sprint_issues(client, sid, story_points_field, batch=100)
+            if fetch_code != 200:
+                if enable_logging:
+                    logger.warning("[Phase 4] Sprint id=%s Agile API取得失敗 code=%s err=%s -> search fallback", sid, fetch_code, fetch_err)
+                fallback_jql = f"Sprint={sid}"
+                fetch_code, issues, fetch_err = client.search_paginated(fallback_jql, ["status", story_points_field], batch=200)
+            if fetch_code != 200:
+                if enable_logging:
+                    logger.warning("[Phase 4] Sprint id=%s 課題取得失敗 code=%s err=%s", sid, fetch_code, fetch_err)
+                continue
+            planned = 0.0
+            completed = 0.0
+            for issue in issues:
+                flds = (issue or {}).get("fields", {})
+                sp_raw = flds.get(story_points_field)
+                sp_val = _normalize_story_points(sp_raw)
+                planned += sp_val
+                if _is_done(flds.get("status")):
+                    completed += sp_val
+            if planned == 0 and completed == 0:
+                if enable_logging:
+                    logger.info("[Phase 4] Sprint id=%s 課題0件 -> サンプル除外 (issues=%d)", sid, len(issues))
+                continue
+            rate = (completed / planned) if planned > 0 else 0.0
+            sample = {
+                "sprintId": sid,
+                "name": sname,
+                "plannedSP": round(planned, 2),
+                "completedSP": round(completed, 2),
+                "rate": rate,
+            }
+            samples.append(sample)
+            if enable_logging:
+                logger.info("[Phase 4] Sprint集計完了 id=%s planned=%.2f completed=%.2f rate=%.1f%%", sid, sample["plannedSP"], sample["completedSP"], rate*100)
+        if not samples:
+            if enable_logging:
+                logger.warning("[Phase 4] Historical Velocity: 有効サンプル0件 (全closed sprint SP=0?)")
+            return None
+        avg_completed = sum(s["completedSP"] for s in samples) / len(samples)
+        avg_planned = sum(s["plannedSP"] for s in samples) / len(samples)
+        result = {
+            "sampleCount": len(samples),
+            "averageCompletedSP": round(avg_completed, 2),
+            "averagePlannedSP": round(avg_planned, 2),
+            "samples": samples,
+        }
+        if enable_logging:
+            logger.info(
+                "[Phase 4] Historical Velocity集計完了 sampleCount=%d averageCompletedSP=%.2f averagePlannedSP=%.2f", result["sampleCount"], result["averageCompletedSP"], result["averagePlannedSP"]
+            )
+        return result
+    except Exception as e:  # pragma: no cover
+        logger.warning("Historical velocity計算失敗: %s", e)
+        return None
+
+
 def _calculate_assignee_workload(core_data: CoreData) -> Dict[str, Dict[str, Any]]:
     """
     担当者別のワークロードを計算する。
@@ -314,7 +660,7 @@ def _calculate_assignee_workload(core_data: CoreData) -> Dict[str, Dict[str, Any
                 }
             
             workload[assignee]["subtasks"] += 1
-            workload[assignee]["storyPoints"] += subtask.story_points
+            workload[assignee]["storyPoints"] += _normalize_story_points(subtask.story_points)
             
             if subtask.done:
                 workload[assignee]["done"] += 1

@@ -60,7 +60,7 @@ def render_dashboard(
         DashboardError: 描画に失敗した場合
     """
     if enable_logging:
-        logger.info("Phase 6: ダッシュボード描画を開始します")
+        logger.info("[Phase 6] ダッシュボード描画を開始します")
     
     try:
         # 出力パスを構築
@@ -107,7 +107,7 @@ def render_dashboard(
             draw_png = _draw_png_func
         
         if enable_logging:
-            logger.info(f"画像を生成中: {output_path}")
+            logger.info(f"[Phase 6] 画像を生成中: {output_path}")
         
         # draw_pngを呼び出し
         try:
@@ -127,7 +127,7 @@ def render_dashboard(
             raise DashboardError(f"ダッシュボード描画エラー: {e}") from e
         
         if enable_logging:
-            logger.info(f"Phase 6: ダッシュボード描画が完了しました: {output_path}")
+            logger.info(f"[Phase 6] ダッシュボード描画が完了しました: {output_path}")
         
         return output_path
         

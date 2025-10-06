@@ -58,7 +58,7 @@ def generate_markdown_report(
         OutputError: ファイル書き込みに失敗した場合
     """
     if enable_logging:
-        logger.info(f"Markdownレポートを生成中: {output_path}")
+        logger.info(f"[Phase 7] Markdownレポートを生成中: {output_path}")
     
     try:
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -143,7 +143,7 @@ def generate_markdown_report(
             f.write("\n".join(md))
         
         if enable_logging:
-            logger.info(f"Markdownレポートを生成しました: {output_path}")
+            logger.info(f"[Phase 7] Markdownレポートを生成しました: {output_path}")
     
     except Exception as e:
         raise OutputError(f"Markdownレポート生成エラー: {e}") from e
@@ -168,7 +168,7 @@ def export_tasks_json(
         OutputError: ファイル書き込みに失敗した場合
     """
     if enable_logging:
-        logger.info(f"タスクJSONをエクスポート中: {output_path}")
+        logger.info(f"[Phase 7] タスクJSONをエクスポート中: {output_path}")
     
     try:
         enriched = {
@@ -185,7 +185,7 @@ def export_tasks_json(
             json.dump(enriched, f, ensure_ascii=False, indent=2)
         
         if enable_logging:
-            logger.info(f"タスクJSONをエクスポートしました: {output_path}")
+            logger.info(f"[Phase 7] タスクJSONをエクスポートしました: {output_path}")
     
     except Exception as e:
         raise OutputError(f"タスクJSONエクスポートエラー: {e}") from e
@@ -214,7 +214,7 @@ def export_metrics_json(
         OutputError: ファイル書き込みに失敗した場合
     """
     if enable_logging:
-        logger.info(f"メトリクスJSONをエクスポート中: {output_path}")
+        logger.info(f"[Phase 7] メトリクスJSONをエクスポート中: {output_path}")
     
     try:
         metrics_data = {
@@ -227,12 +227,17 @@ def export_metrics_json(
             "doneRate": core_data.totals.completion_rate,
             "targetDoneRate": config.target_done_rate,
             "axis": config.axis_mode,
+            "velocity": metrics.velocity,  # 新規追加
+            "burndown": metrics.burndown,  # 新規追加
+            "evidence": metrics.evidence,  # 新規追加
+            "assigneeWorkload": metrics.assignee_workload,
             "extrasAvailable": {
                 "burndown": metrics.burndown is not None,
                 "velocity": metrics.velocity is not None,
                 "status_counts": metrics.status_counts is not None,
                 "time_in_status": metrics.time_in_status is not None,
                 "workload": metrics.workload is not None,
+                "evidence": metrics.evidence is not None,
             }
         }
         

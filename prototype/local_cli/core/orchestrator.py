@@ -4,6 +4,7 @@ Phase 1-7を統合してダッシュボード生成を実行
 """
 
 import logging
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -40,6 +41,26 @@ class DashboardOrchestrator:
         self.ai_summary: Optional[AISummary] = None
         self.image_path: Optional[Path] = None
         self.output_paths: Optional[OutputPaths] = None
+        # 初期化時にロギング設定（まだ設定されていなければ）
+        if enable_logging:
+            self._ensure_logging_configured()
+
+    def _ensure_logging_configured(self) -> None:
+        """ルートロガーへ基本設定を適用（多重設定は避ける）。
+
+        pytest 実行時は冗長にならないよう WARNING 以上に抑制。
+        通常実行時は INFO を出す。
+        """
+        root = logging.getLogger()
+        if root.handlers:  # 既に設定済み
+            return
+        level = logging.INFO
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            level = logging.WARNING
+        logging.basicConfig(
+            level=level,
+            format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+        )
     
     def run(self) -> Path:
         """
@@ -57,12 +78,12 @@ class DashboardOrchestrator:
             
             # Phase 1: 環境準備
             if self.enable_logging:
-                logger.info("📋 Phase 1: Environment setup")
+                logger.info("[Phase 1] Environment setup")
             self.config, self.auth_ctx = setup_environment()
             
             # Phase 2: メタデータ取得
             if self.enable_logging:
-                logger.info("🔍 Phase 2: Fetching Jira metadata")
+                logger.info("[Phase 2] Fetching Jira metadata")
             self.jira_metadata = fetch_jira_metadata(
                 self.auth_ctx,
                 enable_logging=self.enable_logging
@@ -70,7 +91,7 @@ class DashboardOrchestrator:
             
             # Phase 3: コアデータ取得
             if self.enable_logging:
-                logger.info("📊 Phase 3: Fetching core data")
+                logger.info("[Phase 3] Fetching core data")
             self.core_data = fetch_core_data(
                 self.auth_ctx,
                 self.jira_metadata,
@@ -79,7 +100,7 @@ class DashboardOrchestrator:
             
             # Phase 4: メトリクス収集
             if self.enable_logging:
-                logger.info("📈 Phase 4: Collecting metrics")
+                logger.info("[Phase 4] Collecting metrics")
             self.metrics = collect_metrics(
                 self.auth_ctx,
                 self.jira_metadata,
@@ -89,7 +110,7 @@ class DashboardOrchestrator:
             
             # Phase 5: AI要約生成
             if self.enable_logging:
-                logger.info("🤖 Phase 5: Generating AI summary")
+                logger.info("[Phase 5] Generating AI summary")
             self.ai_summary = generate_ai_summary(
                 self.config,
                 self.jira_metadata,
@@ -100,7 +121,7 @@ class DashboardOrchestrator:
             
             # Phase 6: 画像描画
             if self.enable_logging:
-                logger.info("🎨 Phase 6: Rendering dashboard")
+                logger.info("[Phase 6] Rendering dashboard")
             self.image_path = render_dashboard(
                 self.config,
                 self.jira_metadata,
@@ -112,7 +133,7 @@ class DashboardOrchestrator:
             
             # Phase 7: 追加出力
             if self.enable_logging:
-                logger.info("📄 Phase 7: Generating additional outputs")
+                logger.info("[Phase 7] Generating additional outputs")
             self.output_paths = generate_all_outputs(
                 self.config,
                 self.jira_metadata,

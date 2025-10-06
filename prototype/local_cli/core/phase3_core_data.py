@@ -48,7 +48,7 @@ def fetch_core_data(
         CoreDataError: データ取得に失敗した場合
     """
     if enable_logging:
-        logger.info("Phase 3: コアデータ取得を開始します")
+        logger.info("[Phase 3] コアデータ取得を開始します")
     
     try:
         client = JiraClient()
@@ -58,7 +58,7 @@ def fetch_core_data(
         project_key = metadata.project_key
         
         if enable_logging:
-            logger.info(f"スプリントID {sprint_id} の課題を取得します")
+            logger.info(f"[Phase 3] スプリントID {sprint_id} の課題を取得します")
         
         # 親タスクのみを取得（サブタスク以外）
         fields = ["summary", "issuetype", "status", "subtasks", "assignee"]
@@ -73,7 +73,7 @@ def fetch_core_data(
             raise CoreDataError(f"親タスク取得に失敗しました: {error}")
         
         if enable_logging:
-            logger.info(f"親タスク {len(parent_issues)} 件を取得しました")
+            logger.info(f"[Phase 3] 親タスク {len(parent_issues)} 件を取得しました")
         
         # サブタスクの詳細情報を取得
         parents_with_subtasks: List[ParentTask] = []
@@ -95,7 +95,7 @@ def fetch_core_data(
         
         if enable_logging:
             logger.info(
-                f"サブタスク処理完了: 合計 {total_subtasks} 件、"
+                f"[Phase 3] サブタスク処理完了: 合計 {total_subtasks} 件、"
                 f"完了 {total_done} 件 ({int(total_done/max(1,total_subtasks)*100)}%)"
             )
         
@@ -113,7 +113,7 @@ def fetch_core_data(
         )
         
         if enable_logging:
-            logger.info("Phase 3: コアデータ取得が完了しました")
+            logger.info("[Phase 3] コアデータ取得が完了しました")
         
         return core_data
         
@@ -264,6 +264,7 @@ def _extract_subtask_data(
         "issuetype",
         "created",
         "resolutiondate",
+        "priority",
         story_points_field,
     ]
     
@@ -300,6 +301,7 @@ def _extract_subtask_data(
     # 日時情報
     created = fields.get("created")
     resolution_date = fields.get("resolutiondate")
+    priority_name = (fields.get("priority") or {}).get("name")
     
     # changelogから開始時刻と完了時刻を抽出
     changelog = data.get("changelog", {})
@@ -315,6 +317,7 @@ def _extract_subtask_data(
         status=status_name,
         done=is_done,
         assignee=assignee,
+        priority=priority_name,
         story_points=story_points,
         created=created,
         started_at=started_at,
