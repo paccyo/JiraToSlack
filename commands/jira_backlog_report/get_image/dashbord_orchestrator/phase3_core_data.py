@@ -6,12 +6,8 @@ Phase 3: コアデータ取得
 import logging
 from typing import List, Optional, Dict, Any
 
-try:  # Prefer absolute for test monkeypatch compatibility
-    from Loder.jira_client import JiraClient  # type: ignore
-except Exception:  # pragma: no cover
-    from ..Loder.jira_client import JiraClient  # type: ignore
-from .types import (
-    AuthContext,
+
+from commands.jira_backlog_report.get_image.dashbord_orchestrator.types import (
     JiraMetadata,
     CoreData,
     TaskTotals,
@@ -19,8 +15,9 @@ from .types import (
     ParentTask,
 )
 
+from util.request_jira import RequestJiraRepository
 
-logger = logging.getLogger(__name__)
+
 
 
 class CoreDataError(Exception):
@@ -29,75 +26,152 @@ class CoreDataError(Exception):
 
 
 def fetch_core_data(
-    auth: AuthContext,
     metadata: JiraMetadata,
-    enable_logging: bool = False
 ) -> CoreData:
-    """
-    スプリント内のサブタスクデータを取得する。
+    # """
+    # スプリント内のサブタスクデータを取得する。
     
-    Args:
-        auth: 認証コンテキスト
-        metadata: Jiraメタデータ
-        enable_logging: ログ出力を有効化するかどうか
+    # Args:
+    #     auth: 認証コンテキスト
+    #     metadata: Jiraメタデータ
+    #     enable_logging: ログ出力を有効化するかどうか
     
-    Returns:
-        CoreData: 取得したコアデータ
+    # Returns:
+    #     CoreData: 取得したコアデータ
     
-    Raises:
-        CoreDataError: データ取得に失敗した場合
-    """
-    if enable_logging:
-        logger.info("[Phase 3] コアデータ取得を開始します")
+    # Raises:
+    #     CoreDataError: データ取得に失敗した場合
+    # """
+    # if enable_logging:
+    #     print("[Phase 3] コアデータ取得を開始します")
     
-    try:
-        client = JiraClient()
+    # try:
         
         # スプリント内の親タスク（サブタスクを持つもの）を取得
-        sprint_id = metadata.sprint.sprint_id
+        sprint_id = metadata.sprint.get("id")
         project_key = metadata.project_key
         
-        if enable_logging:
-            logger.info(f"[Phase 3] スプリントID {sprint_id} の課題を取得します")
+        # if enable_logging:
+        #     print(f"[Phase 3] スプリントID {sprint_id} の課題を取得します")
         
         # 親タスクのみを取得（サブタスク以外）
+        # fields = ["summary", "issuetype", "status", "subtasks", "assignee"]
+        # code, parent_issues, error = _fetch_parent_tasks(
+        #     client, 
+        #     sprint_id, 
+        #     project_key, 
+        #     fields
+        # )
+        jql_query = f"sprint = {sprint_id} AND type not in subTaskIssueTypes()"
         fields = ["summary", "issuetype", "status", "subtasks", "assignee"]
-        code, parent_issues, error = _fetch_parent_tasks(
-            client, 
-            sprint_id, 
-            project_key, 
-            fields
-        )
+        request_jira_repository = RequestJiraRepository()
+        searched_issues = request_jira_repository.request_jql(jql_query, fileds=fields)
+        # print(searched_issues)
+        # searched_result = searched_issues[0].raw.get("issues", [])
         
-        if code != 200 or parent_issues is None:
-            raise CoreDataError(f"親タスク取得に失敗しました: {error}")
+        # if code != 200 or parent_issues is None:
+        #     raise CoreDataError(f"親タスク取得に失敗しました: {error}")
         
-        if enable_logging:
-            logger.info(f"[Phase 3] 親タスク {len(parent_issues)} 件を取得しました")
+        # if enable_logging:
+        #     print(f"[Phase 3] 親タスク {len(parent_issues)} 件を取得しました")
         
         # サブタスクの詳細情報を取得
         parents_with_subtasks: List[ParentTask] = []
         total_subtasks = 0
         total_done = 0
         
-        for parent_issue in parent_issues:
-            parent_data = _extract_parent_task(
-                client,
-                parent_issue,
-                metadata.story_points_field,
-                enable_logging
+        for issue in searched_issues:
+            # parent_issue = issue.raw.get("issues", [])
+            parent_issue = issue.raw
+            fields = parent_issue.get("fields", {})
+            subtasks = fields.get("subtasks", [])
+            # サブタスクがなければ処理を終了
+            if not subtasks:
+                continue
+
+            parent_key = parent_issue.get("key", "")
+            parent_summary = fields.get("summary", "")
+            parent_assignee = (fields.get("assignee") or {}).get("displayName")
+            
+            # try:
+            subtask_list = []
+            for subtask_raw in subtasks:
+                subtask_id = subtask_raw.get("id") or subtask_raw.get("key")
+                query_fields = [
+                    "summary",
+                    "status",
+                    "assignee",
+                    "issuetype",
+                    "created",
+                    "resolutiondate",
+                    "priority",
+                    "duedate",
+                    metadata.story_points_field,
+                ]
+                subtask = request_jira_repository.get_issue(subtask_id, fields=query_fields,expand="changelog")
+                subtask_issue = subtask.raw
+                # print(subtask_issue)
+                subtask_fields = subtask_issue.get("fields", {})
+                subtask_key = subtask_issue.get("key", subtask_id)
+                subtask_summary = subtask_fields.get("summary", "")
+                subtask_status = subtask_fields.get("status", {})
+                subtask_status_name = subtask_status.get("name", "")
+                # 完了判定
+                subtask_is_done = _is_status_done(subtask_status)
+                subtasks_changelog = subtask_issue.get("changelog", {}).get("histories", [])
+                started_at, completed_at = _extract_times_from_changelog(subtasks_changelog)
+
+                
+                # 担当者
+                subtask_assignee = (subtask_fields.get("assignee") or {}).get("displayName") or parent_assignee
+                
+                # ストーリーポイント
+                subtask_sp_raw = subtask_fields.get(metadata.story_points_field)
+                subtask_story_points = float(subtask_sp_raw) if isinstance(subtask_sp_raw, (int, float)) else 1.0
+                # 日時情報
+                subtask_created = subtask_fields.get("created")
+                subtask_resolution_date = subtask_fields.get("resolutiondate")
+                subtask_priority_name = (subtask_fields.get("priority") or {}).get("name")
+                subtask_due_date = subtask_fields.get("duedate")
+                # assignee_obj = getattr(subtask_fields, 'assignee', None)
+                
+                subtask_list.append(
+                    SubtaskData(
+                        key=subtask_key,
+                        summary=subtask_summary,
+                        status=subtask_status_name,
+                        done=subtask_is_done,
+                        assignee=subtask_assignee,
+                        priority=subtask_priority_name,
+                        story_points=subtask_story_points,
+                        created=subtask_created,
+                        started_at=started_at,
+                        completed_at=completed_at,
+                        due_date=subtask_due_date,
+                    )
+                )
+            parent_assignee_obj = fields.get("assignee")
+            # except Exception as e:
+            #     print(f"エラーが発生しました: {e}")
+            print("aa",fields)
+            parent_data = ParentTask(
+                key=parent_issue.get("key", ""),
+                summary=fields.get("summary", ""),
+                assignee=parent_assignee_obj.get("displayName") if parent_assignee_obj else None,
+                subtasks=subtask_list
             )
+            
             
             if parent_data and parent_data.subtasks:
                 parents_with_subtasks.append(parent_data)
                 total_subtasks += len(parent_data.subtasks)
                 total_done += sum(1 for sub in parent_data.subtasks if sub.is_done)
         
-        if enable_logging:
-            logger.info(
-                f"[Phase 3] サブタスク処理完了: 合計 {total_subtasks} 件、"
-                f"完了 {total_done} 件 ({int(total_done/max(1,total_subtasks)*100)}%)"
-            )
+        # if enable_logging:
+        #     print(
+        #         f"[Phase 3] サブタスク処理完了: 合計 {total_subtasks} 件、"
+        #         f"完了 {total_done} 件 ({int(total_done/max(1,total_subtasks)*100)}%)"
+        #     )
         
         # TaskTotalsを作成
         task_totals = TaskTotals(
@@ -112,220 +186,15 @@ def fetch_core_data(
             totals=task_totals
         )
         
-        if enable_logging:
-            logger.info("[Phase 3] コアデータ取得が完了しました")
+        # if enable_logging:
+        #     print("[Phase 3] コアデータ取得が完了しました")
         
         return core_data
         
-    except CoreDataError:
-        raise
-    except Exception as e:
-        raise CoreDataError(f"予期しないエラーが発生しました: {str(e)}") from e
-
-
-def _fetch_parent_tasks(
-    client: JiraClient,
-    sprint_id: int,
-    project_key: Optional[str],
-    fields: List[str]
-) -> tuple[int, Optional[List[Dict[str, Any]]], str]:
-    """
-    スプリント内の親タスクを取得する（Agile API使用）。
-    
-    Args:
-        client: JiraClient
-        sprint_id: スプリントID
-        project_key: プロジェクトキー（オプション）
-        fields: 取得するフィールドのリスト
-    
-    Returns:
-        (status_code, issues, error_message)
-    """
-    # Agile APIでスプリント内の課題を取得
-    # サブタスク以外（親タスク）のみを対象とする
-    start_at = 0
-    batch_size = 100
-    all_issues: List[Dict[str, Any]] = []
-    
-    # JQLクエリ: サブタスク以外のタスクを取得
-    jql_parts = ["type not in subTaskIssueTypes()"]
-    if project_key:
-        jql_parts.insert(0, f"project={project_key}")
-    jql = " AND ".join(jql_parts)
-    
-    while True:
-        params = {
-            "jql": jql,
-            "fields": ",".join(fields),
-            "startAt": start_at,
-            "maxResults": batch_size,
-        }
-        
-        code, data, err = client.api_get(
-            f"{client.domain}/rest/agile/1.0/sprint/{sprint_id}/issue",
-            params=params
-        )
-        
-        if code != 200 or not data:
-            return code, None, f"スプリント {sprint_id} の課題取得に失敗: {err}"
-        
-        issues = data.get("issues", [])
-        total = int(data.get("total", 0))
-        all_issues.extend(issues)
-        
-        start_at += len(issues)
-        if start_at >= total or not issues:
-            break
-    
-    return 200, all_issues, ""
-
-
-def _extract_parent_task(
-    client: JiraClient,
-    parent_issue: Dict[str, Any],
-    story_points_field: str,
-    enable_logging: bool
-) -> Optional[ParentTask]:
-    """
-    親タスクからParentTaskオブジェクトを抽出する。
-    
-    Args:
-        client: JiraClient
-        parent_issue: 親タスクのJSONデータ
-        story_points_field: ストーリーポイントフィールドID
-        enable_logging: ログ出力を有効化するかどうか
-    
-    Returns:
-        ParentTask または None（サブタスクがない場合）
-    """
-    fields = parent_issue.get("fields", {})
-    subtasks = fields.get("subtasks", [])
-    
-    # サブタスクがない場合はスキップ
-    if not subtasks:
-        return None
-    
-    parent_key = parent_issue.get("key", "")
-    parent_summary = fields.get("summary", "")
-    parent_assignee = (fields.get("assignee") or {}).get("displayName")
-    
-    # サブタスクの詳細を取得
-    subtask_list: List[SubtaskData] = []
-    
-    for subtask_raw in subtasks:
-        subtask_data = _extract_subtask_data(
-            client,
-            subtask_raw,
-            parent_assignee,
-            story_points_field
-        )
-        
-        if subtask_data:
-            subtask_list.append(subtask_data)
-    
-    if not subtask_list:
-        return None
-    
-    return ParentTask(
-        key=parent_key,
-        summary=parent_summary,
-        assignee=parent_assignee,
-        subtasks=subtask_list
-    )
-
-
-def _extract_subtask_data(
-    client: JiraClient,
-    subtask_raw: Dict[str, Any],
-    parent_assignee: Optional[str],
-    story_points_field: str
-) -> Optional[SubtaskData]:
-    """
-    サブタスクの詳細情報を取得してSubtaskDataオブジェクトを作成する。
-    
-    Args:
-        client: JiraClient
-        subtask_raw: サブタスクの基本情報
-        parent_assignee: 親タスクの担当者
-        story_points_field: ストーリーポイントフィールドID
-    
-    Returns:
-        SubtaskData または None（取得失敗時）
-    """
-    subtask_id = subtask_raw.get("id") or subtask_raw.get("key")
-    if not subtask_id:
-        return None
-    
-    # サブタスクの詳細を取得
-    query_fields = [
-        "summary",
-        "status",
-        "assignee",
-        "issuetype",
-        "created",
-        "resolutiondate",
-        "priority",
-        "duedate",
-        story_points_field,
-    ]
-    
-    params = {
-        "fields": ",".join(query_fields),
-        "expand": "changelog"
-    }
-    
-    url = f"{client.domain}/rest/api/3/issue/{subtask_id}"
-    code, data, error = client.api_get(url, params=params)
-    
-    if code != 200 or not data:
-        logger.warning(f"サブタスク {subtask_id} の詳細取得に失敗: {error}")
-        return None
-    
-    fields = data.get("fields", {})
-    
-    # 基本情報
-    key = data.get("key", subtask_id)
-    summary = fields.get("summary", "")
-    status = fields.get("status", {})
-    status_name = status.get("name", "")
-    
-    # 完了判定
-    is_done = _is_status_done(status)
-    
-    # 担当者
-    assignee = (fields.get("assignee") or {}).get("displayName") or parent_assignee
-    
-    # ストーリーポイント
-    sp_raw = fields.get(story_points_field)
-    story_points = float(sp_raw) if isinstance(sp_raw, (int, float)) else 1.0
-    
-    # 日時情報
-    created = fields.get("created")
-    resolution_date = fields.get("resolutiondate")
-    priority_name = (fields.get("priority") or {}).get("name")
-    due_date = fields.get("duedate")
-    
-    # changelogから開始時刻と完了時刻を抽出
-    changelog = data.get("changelog", {})
-    started_at, completed_at = _extract_times_from_changelog(changelog)
-    
-    # 完了時刻がない場合はresolution_dateを使用
-    if not completed_at and resolution_date:
-        completed_at = resolution_date
-    
-    return SubtaskData(
-        key=key,
-        summary=summary,
-        status=status_name,
-        done=is_done,
-        assignee=assignee,
-        priority=priority_name,
-        story_points=story_points,
-        created=created,
-        started_at=started_at,
-        completed_at=completed_at,
-        due_date=due_date,
-    )
+    # except CoreDataError:
+    #     raise
+    # except Exception as e:
+    #     raise CoreDataError(f"予期しないエラーが発生しました: {str(e)}") from e
 
 
 def _is_status_done(status: Optional[Dict[str, Any]]) -> bool:
@@ -345,7 +214,6 @@ def _is_status_done(status: Optional[Dict[str, Any]]) -> bool:
     key = category.get("key", "")
     
     return key == "done"
-
 
 def _extract_times_from_changelog(
     changelog: Dict[str, Any]

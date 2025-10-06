@@ -32,16 +32,19 @@ class RequestJiraRepository:
             return None
 
 
-    def request_jql(self, query, max_results=False):
+    def request_jql(self, query, max_results=False, fileds=None):
         print(f"request jql query: \n{query}")
         try:
             # JQLを実行して課題を検索
-            searched_issues = self.jira_client.search_issues(query, maxResults=max_results)
+            searched_issues = self.jira_client.search_issues(query, maxResults=max_results, fields=fileds)
             print("✅ 検索が完了しました。")
             return searched_issues
         except Exception as e:
             print(f"❌ JQLの実行に失敗しました: {e}")
             return None
+    
+    def get_issue(self, issue_key, fields=None, expand=None):
+        return self.jira_client.issue(issue_key)
     
     def build_jql_from_json(self, data: dict) -> str:
 
@@ -302,3 +305,4 @@ class RequestJiraRepository:
             if field.get("schema", {}).get("custom") == "com.pyxis.greenhopper.jira:jsw-story-points":
                 story_points_field_id = field["id"]
                 break
+

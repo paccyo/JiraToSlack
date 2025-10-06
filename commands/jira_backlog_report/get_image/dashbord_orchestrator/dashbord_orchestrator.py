@@ -78,9 +78,7 @@ class DashboardOrchestrator:
             if self.enable_logging:
                 print("[Phase 3] Fetching core data")
             self.core_data = fetch_core_data(
-                self.auth_ctx,
                 self.jira_metadata,
-                enable_logging=self.enable_logging
             )
             
             # Phase 4: メトリクス収集
