@@ -5,6 +5,7 @@ Phase 4: メトリクス収集のテスト
 import pytest
 from unittest.mock import MagicMock, patch
 from dataclasses import dataclass
+from datetime import datetime, timezone, timedelta
 
 from prototype.local_cli.core.phase4_metrics import (
     collect_metrics,
@@ -12,6 +13,7 @@ from prototype.local_cli.core.phase4_metrics import (
     _execute_single_query,
     _aggregate_metrics,
     _calculate_assignee_workload,
+    _calculate_time_in_status,
     MetricsError,
 )
 from prototype.local_cli.core.types import (
@@ -76,6 +78,7 @@ def core_data():
             created="2024-01-01T10:00:00.000+0900",
             started_at="2024-01-02T10:00:00.000+0900",
             completed_at="2024-01-03T10:00:00.000+0900",
+            due_date="2024-01-05",
         ),
         SubtaskData(
             key="TEST-102",
@@ -83,11 +86,12 @@ def core_data():
             done=False,
             assignee="user2@example.com",
             status="In Progress",
-            priority="Medium",
+            priority="High",
             story_points=5.0,
             created="2024-01-01T11:00:00.000+0900",
             started_at="2024-01-02T11:00:00.000+0900",
             completed_at=None,
+            due_date="2024-01-06",
         ),
         SubtaskData(
             key="TEST-103",
@@ -100,6 +104,7 @@ def core_data():
             created="2024-01-01T12:00:00.000+0900",
             started_at=None,
             completed_at=None,
+            due_date="2024-01-10",
         ),
     ]
     
@@ -306,6 +311,7 @@ def test_collect_metrics_integration(auth_context, metadata, core_data, monkeypa
         (200, 100, None), # project_total
         (200, 60, None),  # project_open
     ]
+    mock_client.search_paginated.return_value = (200, [], "")
     
     # JiraClientをモックに置き換え
     def mock_jira_client_init(self):
@@ -348,6 +354,7 @@ def test_collect_metrics_with_query_failures(auth_context, metadata, core_data):
         (200, 100, None),     # project_total
         (200, 60, None),      # project_open
     ]
+    mock_client.search_paginated.return_value = (200, [], "")
     
     # JiraClientをモックに置き換え
     import sys
@@ -370,6 +377,99 @@ def test_collect_metrics_with_query_failures(auth_context, metadata, core_data):
     # 失敗したクエリ（0になる）
     assert metrics.kpis["dueSoon"] == 0
     assert metrics.kpis["unassignedCount"] == 0
+
+
+def test_extract_evidence_enriched_fields(metadata, core_data, monkeypatch):
+    """Evidence抽出が拡張フィールドを付与する"""
+    from prototype.local_cli.core import phase4_metrics
+
+    class _FixedDateTime(datetime):  # type: ignore
+        @classmethod
+        def now(cls, tz=None):
+            tz = tz or timezone.utc
+            return cls(2024, 1, 5, 0, 0, tzinfo=tz)
+
+    monkeypatch.setattr(phase4_metrics, "datetime", _FixedDateTime)
+
+    evidences = phase4_metrics._extract_evidence(core_data, {}, metadata, top_n=5)
+    assert evidences is not None
+    assert len(evidences) >= 2
+
+    example = evidences[0]
+    assert example["status"]
+    assert example["assignee"]
+    assert "reason" in example and example["reason"]
+    assert "why" in example and example["why"]
+    assert "days" in example
+
+
+def test_calculate_time_in_status_basic():
+    """Time-in-Status の基礎集計"""
+    sprint = SprintMetadata(
+        sprint={"id": 456, "name": "Sprint 1", "state": "active"},
+        sprint_id=456,
+        sprint_name="Sprint 1",
+        sprint_start="2024-01-01T00:00:00+09:00",
+        sprint_end="2024-01-04T00:00:00+09:00",
+        active_sprints_count=1,
+    )
+    board = BoardMetadata(
+        board={"id": 123, "name": "Test Board"},
+        board_id=123,
+        project_key="TEST",
+        boards_count=1,
+    )
+    metadata_with_dates = JiraMetadata(
+        board=board,
+        sprint=sprint,
+        project_key="TEST",
+        story_points_field="customfield_10016",
+    )
+
+    mock_client = MagicMock()
+    mock_client.domain = "https://example.atlassian.net"
+    mock_client.search_paginated.return_value = (200, [{"id": "1", "key": "TEST-1"}], "")
+    mock_client.api_get.return_value = (
+        200,
+        {
+            "fields": {
+                "status": {"name": "Done"},
+                "created": "2023-12-31T00:00:00+09:00",
+            },
+            "changelog": {
+                "histories": [
+                    {
+                        "created": "2024-01-02T00:00:00+09:00",
+                        "items": [{"field": "status", "toString": "In Progress"}],
+                    },
+                    {
+                        "created": "2024-01-03T00:00:00+09:00",
+                        "items": [{"field": "status", "toString": "Review"}],
+                    },
+                    {
+                        "created": "2024-01-04T00:00:00+09:00",
+                        "items": [{"field": "status", "toString": "Done"}],
+                    },
+                ]
+            },
+        },
+        "",
+    )
+
+    result = _calculate_time_in_status(
+        mock_client,
+        metadata_with_dates,
+        unit="days",
+        scope="sprint",
+        enable_logging=False,
+    )
+
+    assert result is not None
+    tot = result["totalByStatus"]
+    assert pytest.approx(1.0, rel=1e-3) == tot["In Progress"]
+    assert pytest.approx(1.0, rel=1e-3) == tot["Review"]
+    issue_entry = result["perIssue"][0]
+    assert pytest.approx(1.0, rel=1e-3) == issue_entry["byStatus"]["Review"]
 
 
 if __name__ == "__main__":

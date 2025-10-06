@@ -122,7 +122,6 @@ def core_data():
 def metrics():
     """メトリクスのフィクスチャ"""
     return MetricsCollection(
-        burndown=None,
         velocity=None,
         project_sprint_count=None,
         status_counts=None,
@@ -146,6 +145,7 @@ def metrics():
                 "days": 2.5,
                 "assignee": "user1@example.com",
                 "why": "テスト用",
+                "reason": "テスト用",
                 "link": "https://test.atlassian.net/browse/TEST-101"
             }
         ],
@@ -193,12 +193,45 @@ def test_generate_markdown_report_basic(
     assert output_path.exists()
     
     # 内容を確認
-        # burndown削除後: extrasAvailableからburndownキーは存在しない想定
-        assert "burndown" not in extras
+    content = output_path.read_text(encoding="utf-8")
     assert "Sprint 1" in content
     assert "2 tasks" in content
     assert "Done 1" in content
     assert "## リスク" in content
+
+
+def test_generate_markdown_report_with_cycle_time(
+    temp_output_dir,
+    metadata,
+    core_data,
+    metrics,
+):
+    """滞留時間セクションの表示"""
+    output_path = temp_output_dir / "test_report_cycle.md"
+
+    metrics.time_in_status = {
+        "scope": "sprint",
+        "window": {"since": "2024-01-01T00:00:00+09:00", "until": "2024-01-07T00:00:00+09:00", "unit": "days"},
+        "totalByStatus": {"In Progress": 3.5, "Review": 1.2},
+        "perIssue": [
+            {"key": "TEST-101", "byStatus": {"In Progress": 2.0}},
+            {"key": "TEST-102", "byStatus": {"Review": 1.2}},
+        ],
+    }
+
+    generate_markdown_report(
+        output_path,
+        metadata,
+        core_data,
+        metrics,
+        None,
+        0.8,
+    )
+
+    content = output_path.read_text(encoding="utf-8")
+    assert "## サイクルタイム (滞留時間)" in content
+    assert "In Progress: 3.5日" in content
+    assert "滞留時間が長い課題" in content
 
 
 def test_generate_markdown_report_with_ai_summary(
@@ -239,7 +272,6 @@ def test_generate_markdown_report_with_risks(
     
     # リスクありのメトリクス
     metrics_with_risks = MetricsCollection(
-        burndown=None,
         velocity=None,
         project_sprint_count=None,
         status_counts=None,
@@ -370,6 +402,7 @@ def test_export_metrics_json_basic(
     assert data["doneRate"] == 0.5
     assert data["targetDoneRate"] == 0.8
     assert data["axis"] == "percent"
+    assert "timeInStatus" in data
 
 
 def test_export_metrics_json_extras_available(
@@ -399,6 +432,7 @@ def test_export_metrics_json_extras_available(
     assert "burndown" not in extras
     assert "velocity" in extras
     assert extras["velocity"] == False
+    assert extras.get("time_in_status") is False
 
 
 # ============================================================

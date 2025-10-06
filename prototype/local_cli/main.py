@@ -1008,7 +1008,7 @@ def draw_png(
     extras: Optional[Dict[str, Any]] = None,
 ) -> None:
     W, H = 1400, 980
-    bg = (255, 255, 255)
+    bg = (250, 250, 250)
     img = Image.new("RGB", (W, H), bg)
     g = ImageDraw.Draw(img)
 
@@ -1754,54 +1754,92 @@ def draw_png(
         g.text((x0, y0 - 18), "重要エビデンス（Top）", font=font_md, fill=col_text)
         if not ev:
             return
-        # header
-        # 課題列にサマリーも併記するため幅を広げる
-        # 課題/担当者/ステータス/理由/リンクの比率を調整してリンク列の開始位置を左へ寄せる
-        # リンクは短縮表示するが、開始位置が左に来るよう最後の2列を縮める
-        # 列幅: リンクを最左・最大幅、他は最小限
-        col_w = [int(w*0.40), int(w*0.18), int(w*0.12), int(w*0.18), int(w*0.12)]
-        headers = ["リンク", "課題", "担当者", "ステータス", "重要な理由"]
-        cx = x0
-        y = y0
+
+        def _fit(text: Optional[str], width: int) -> str:
+            raw = (text or "").strip()
+            if not raw:
+                return "-"
+            candidate = raw
+            ellipsis = "…"
+            max_width = max(0, width - 10)
+            while candidate and g.textlength(candidate, font=font_sm) > max_width:
+                candidate = candidate[:-1]
+            if not candidate:
+                return raw[:1]
+            if candidate != raw and g.textlength(candidate + ellipsis, font=font_sm) <= max_width:
+                candidate = candidate + ellipsis
+            return candidate
+
+        ratios = [0.16, 0.30, 0.12, 0.10, 0.12]
+        col_w = [int(w * r) for r in ratios]
+        col_w.append(w - sum(col_w))
+        headers = ["カテゴリ", "課題", "期限", "滞留", "担当者", "要注意ポイント"]
+        due_colors = {
+            "overdue": (255, 210, 210),
+            "due_today": (255, 235, 210),
+            "due_soon": (255, 246, 210),
+            "future": (232, 246, 255),
+        }
+        row_h = 20
+        header_h = 24
+        start_x = x0 + 6
         g.rectangle([x0, y0, x0 + w, y0 + h], outline=col_outline, fill=(250, 250, 250))
-        # header row
-        y_row = y + 6
-        cx = x0 + 8
+        g.rectangle([x0, y0, x0 + w, y0 + header_h], outline=col_outline, fill=(238, 238, 238))
+
+        # header texts
+        cx = start_x
+        head_y = y0 + 4
         for i, head in enumerate(headers):
-            g.text((cx, y_row), head, font=font_sm, fill=col_text)
+            g.text((cx, head_y), head, font=font_sm, fill=col_text)
             cx += col_w[i]
-        y_row += 20
-        # data rows
-        for e in ev:
-            cx = x0 + 8
-            # リンク（全表示、はみ出し時は末尾...）
-            raw_link = str(e.get('link', '')).replace('https://', '').replace('http://', '')
-            link = raw_link
-            while g.textlength(link, font=font_sm) > (col_w[0] - 12) and len(link) > 4:
-                link = link[:-1]
-            if g.textlength(link, font=font_sm) > (col_w[0] - 12):
-                link = link[:max(0, len(link)-3)] + '...'
-            g.text((cx, y_row), link, font=font_sm, fill=col_text)
+
+        y_row = y0 + header_h + 4
+        max_rows = max(1, (h - header_h - 6) // row_h)
+        for e in ev[:max_rows]:
+            cx = start_x
+            category = e.get("category") or e.get("type") or "-"
+            g.text((cx, y_row), _fit(category, col_w[0]), font=font_sm, fill=col_text)
             cx += col_w[0]
-            # 課題: key + summary (truncated)
-            key_sum = f"{e.get('key', '')} {e.get('summary', '')[:20]}".strip()
-            g.text((cx, y_row), key_sum, font=font_sm, fill=col_text)
+
+            key_summary = f"{e.get('key', '')} {e.get('summary', '')}".strip()
+            g.text((cx, y_row), _fit(key_summary, col_w[1]), font=font_sm, fill=col_text)
             cx += col_w[1]
-            # 担当者
-            assignee = e.get('assignee', '')[:10]
-            g.text((cx, y_row), assignee, font=font_sm, fill=col_text)
+
+            due_label_raw = e.get("dueLabel")
+            if due_label_raw:
+                due_text = str(due_label_raw)
+            else:
+                due_raw = e.get("due") or e.get("duedate")
+                if isinstance(due_raw, str) and due_raw:
+                    due_text = due_raw.split("T")[0]
+                else:
+                    due_text = "-"
+            due_status = e.get("dueStatus") or ""
+            cell_left = cx
+            cell_right = cx + col_w[2] - 6
+            fill = due_colors.get(str(due_status), (242, 242, 242))
+            g.rectangle([cell_left - 2, y_row - 2, cell_right, y_row + row_h - 6], fill=fill, outline=None)
+            g.text((cx, y_row), _fit(due_text, col_w[2]), font=font_sm, fill=col_text)
             cx += col_w[2]
-            # ステータス
-            status = e.get('status', '')[:10]
-            g.text((cx, y_row), status, font=font_sm, fill=col_text)
+
+            days = e.get("days")
+            if isinstance(days, (int, float)) and days >= 0:
+                days_text = f"{days:.1f}日"
+            else:
+                days_text = "-"
+            g.text((cx, y_row), _fit(days_text, col_w[3]), font=font_sm, fill=col_text)
             cx += col_w[3]
-            # 重要な理由
-            why = e.get('why', '')[:20]
-            g.text((cx, y_row), why, font=font_sm, fill=col_text)
+
+            assignee = e.get("assignee") or "(未割り当て)"
+            g.text((cx, y_row), _fit(assignee, col_w[4]), font=font_sm, fill=col_text)
             cx += col_w[4]
-            y_row += 16
-            if y_row > y0 + h - 10:
-                break  # prevent overflow
+
+            reason = e.get("reason") or e.get("why") or ""
+            g.text((cx, y_row), _fit(reason, col_w[5]), font=font_sm, fill=col_text)
+
+            y_row += row_h
+            if y_row + row_h > y0 + h:
+                break
     ev_box_x0 = left_col_x0
     ev_box_y0 = max(tis_y1, st_y1) + 40
     ev_box_w = W - padding - ev_box_x0

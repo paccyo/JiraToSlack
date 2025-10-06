@@ -265,6 +265,7 @@ def _extract_subtask_data(
         "created",
         "resolutiondate",
         "priority",
+        "duedate",
         story_points_field,
     ]
     
@@ -302,6 +303,7 @@ def _extract_subtask_data(
     created = fields.get("created")
     resolution_date = fields.get("resolutiondate")
     priority_name = (fields.get("priority") or {}).get("name")
+    due_date = fields.get("duedate")
     
     # changelogから開始時刻と完了時刻を抽出
     changelog = data.get("changelog", {})
@@ -321,7 +323,8 @@ def _extract_subtask_data(
         story_points=story_points,
         created=created,
         started_at=started_at,
-        completed_at=completed_at
+        completed_at=completed_at,
+        due_date=due_date,
     )
 
 

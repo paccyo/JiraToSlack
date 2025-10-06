@@ -213,6 +213,7 @@ class SubtaskData:
     created: Optional[str] = None
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
+    due_date: Optional[str] = None
     
     # 後方互換性のためのプロパティ
     @property
@@ -233,6 +234,7 @@ class SubtaskData:
             "created": self.created,
             "startedAt": self.started_at,
             "completedAt": self.completed_at,
+            "dueDate": self.due_date,
         }
 
 
@@ -276,6 +278,7 @@ class CoreData:
                     assignee=st.get("assignee"),
                     status=st.get("status"),
                     priority=st.get("priority"),
+                    due_date=st.get("dueDate") or st.get("duedate"),
                 )
                 for st in subtasks_data
             ]
@@ -307,6 +310,7 @@ class CoreData:
 @dataclass
 class MetricsCollection:
     """全メトリクスを保持"""
+    burndown: Optional[Dict[str, Any]] = None
     velocity: Optional[Dict[str, Any]] = None
     project_sprint_count: Optional[Dict[str, Any]] = None
     status_counts: Optional[Dict[str, Any]] = None
@@ -321,6 +325,7 @@ class MetricsCollection:
     def to_dict(self) -> Dict[str, Any]:
         """extras辞書形式に変換（既存コードとの互換性）"""
         return {
+            "burndown": self.burndown,
             "velocity": self.velocity,
             "project_sprint_count": self.project_sprint_count,
             "status_counts": self.status_counts,

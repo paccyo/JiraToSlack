@@ -246,6 +246,7 @@ def _build_context(
         "workload": _summarize_workload(metrics.assignee_workload),
         "top_evidence": _summarize_evidence(metrics.evidence),
         "status_snapshot": _summarize_status_counts(metrics.status_counts),
+        "parents": [parent.to_dict() for parent in core_data.parents],
     }
 
     return context

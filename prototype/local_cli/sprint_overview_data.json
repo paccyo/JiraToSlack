@@ -62,41 +62,159 @@
       ]
     }
   },
+  "timeInStatus": {
+    "scope": "sprint",
+    "sprint": {
+      "id": 133,
+      "name": "SCRUM スプリント 5"
+    },
+    "project": null,
+    "window": {
+      "since": "2025-10-03T02:16:17.446000+00:00",
+      "until": "2025-10-10T02:16:41+00:00",
+      "unit": "days"
+    },
+    "totalByStatus": {
+      "Abort": 0.17192568943287037,
+      "REVIEWING": 0.1720140004050926,
+      "TODO": 0.17207895372685184,
+      "pending": 6.254121409282408,
+      "IN_progress": 3.298861780798611
+    },
+    "perIssue": [
+      {
+        "key": "SCRUM-115",
+        "byStatus": {}
+      },
+      {
+        "key": "SCRUM-114",
+        "byStatus": {
+          "Abort": 0.17192568943287037
+        }
+      },
+      {
+        "key": "SCRUM-113",
+        "byStatus": {
+          "REVIEWING": 0.1720140004050926
+        }
+      },
+      {
+        "key": "SCRUM-112",
+        "byStatus": {
+          "TODO": 0.17207895372685184
+        }
+      },
+      {
+        "key": "SCRUM-111",
+        "byStatus": {
+          "pending": 3.1270546640972223
+        }
+      },
+      {
+        "key": "SCRUM-110",
+        "byStatus": {
+          "IN_progress": 0.1717988870486111
+        }
+      },
+      {
+        "key": "SCRUM-109",
+        "byStatus": {
+          "IN_progress": 3.12706289375
+        }
+      },
+      {
+        "key": "SCRUM-108",
+        "byStatus": {
+          "pending": 3.1270667451851857
+        }
+      }
+    ]
+  },
   "evidence": [
     {
       "type": "unassigned",
+      "category": "担当未設定",
       "key": "SCRUM-134",
       "summary": "Slackデプロイ環境の依存サービス確認",
       "priority": "Medium",
-      "assignee": "(未割り当て)"
+      "assignee": "(未割り当て)",
+      "status": "pending",
+      "days": 0.2,
+      "due": null,
+      "duedate": null,
+      "dueLabel": null,
+      "dueInDays": null,
+      "dueStatus": null,
+      "why": "担当未設定 / 優先度Medium / 担当: (未割り当て) / 滞留: 0.2日。早急に対応が必要です",
+      "reason": "担当未設定 / 優先度Medium / 担当: (未割り当て) / 滞留: 0.2日。早急に対応が必要です"
     },
     {
       "type": "unassigned",
+      "category": "担当未設定",
       "key": "SCRUM-135",
       "summary": "Slackデプロイ環境の修正案作成",
       "priority": "Medium",
-      "assignee": "(未割り当て)"
+      "assignee": "(未割り当て)",
+      "status": "pending",
+      "days": 0.2,
+      "due": null,
+      "duedate": null,
+      "dueLabel": null,
+      "dueInDays": null,
+      "dueStatus": null,
+      "why": "担当未設定 / 優先度Medium / 担当: (未割り当て) / 滞留: 0.2日。早急に対応が必要です",
+      "reason": "担当未設定 / 優先度Medium / 担当: (未割り当て) / 滞留: 0.2日。早急に対応が必要です"
     },
     {
       "type": "unassigned",
+      "category": "担当未設定",
       "key": "SCRUM-132",
       "summary": "Slackデプロイ環境の再現テスト実施",
       "priority": "Medium",
-      "assignee": "(未割り当て)"
+      "assignee": "(未割り当て)",
+      "status": "pending",
+      "days": 0.2,
+      "due": null,
+      "duedate": null,
+      "dueLabel": null,
+      "dueInDays": null,
+      "dueStatus": null,
+      "why": "担当未設定 / 優先度Medium / 担当: (未割り当て) / 滞留: 0.2日。早急に対応が必要です",
+      "reason": "担当未設定 / 優先度Medium / 担当: (未割り当て) / 滞留: 0.2日。早急に対応が必要です"
     },
     {
       "type": "unassigned",
+      "category": "担当未設定",
       "key": "SCRUM-133",
       "summary": "Slackデプロイ環境のエラーログ収集",
       "priority": "Medium",
-      "assignee": "(未割り当て)"
+      "assignee": "(未割り当て)",
+      "status": "pending",
+      "days": 0.2,
+      "due": null,
+      "duedate": null,
+      "dueLabel": null,
+      "dueInDays": null,
+      "dueStatus": null,
+      "why": "担当未設定 / 優先度Medium / 担当: (未割り当て) / 滞留: 0.2日。早急に対応が必要です",
+      "reason": "担当未設定 / 優先度Medium / 担当: (未割り当て) / 滞留: 0.2日。早急に対応が必要です"
     },
     {
       "type": "unassigned",
+      "category": "担当未設定",
       "key": "SCRUM-137",
       "summary": "エラー発生箇所の特定",
       "priority": "Medium",
-      "assignee": "(未割り当て)"
+      "assignee": "(未割り当て)",
+      "status": "pending",
+      "days": 0.2,
+      "due": null,
+      "duedate": null,
+      "dueLabel": null,
+      "dueInDays": null,
+      "dueStatus": null,
+      "why": "担当未設定 / 優先度Medium / 担当: (未割り当て) / 滞留: 0.2日。早急に対応が必要です",
+      "reason": "担当未設定 / 優先度Medium / 担当: (未割り当て) / 滞留: 0.2日。早急に対応が必要です"
     }
   ],
   "assigneeWorkload": {
@@ -122,7 +240,7 @@
   "extrasAvailable": {
     "velocity": true,
     "status_counts": false,
-    "time_in_status": false,
+    "time_in_status": true,
     "workload": false,
     "evidence": true
   }

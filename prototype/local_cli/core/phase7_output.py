@@ -6,7 +6,7 @@ Markdown、JSON形式での各種レポート生成
 import logging
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, List, Tuple, Any
 from datetime import datetime
 
 from .types import (
@@ -73,6 +73,7 @@ def generate_markdown_report(
         kpis = metrics.kpis
         risks = metrics.risks
         evidence = metrics.evidence or []
+        time_in_status = metrics.time_in_status
         
         # Markdown構築
         md = []
@@ -111,22 +112,119 @@ def generate_markdown_report(
         
         if not has_risk:
             md.append("- 特筆すべきリスクなし")
+
+        # サイクルタイム / 滞留時間
+        tis_total: Dict[str, float] = {}
+        tis_window_unit = "days"
+        tis_issues: List[Dict[str, Any]] = []
+        if isinstance(time_in_status, dict):
+            tis_total = {k: float(v) for k, v in (time_in_status.get("totalByStatus") or {}).items() if isinstance(v, (int, float))}
+            tis_window = time_in_status.get("window") or {}
+            tis_window_unit = str(tis_window.get("unit") or "days").lower()
+            tis_issues = time_in_status.get("perIssue") or []
+
+        if tis_total:
+            md.append("")
+            md.append("## サイクルタイム (滞留時間)")
+            window_info = (time_in_status or {}).get("window") if isinstance(time_in_status, dict) else None
+            window_since = (window_info or {}).get("since") if isinstance(window_info, dict) else None
+            window_until = (window_info or {}).get("until") if isinstance(window_info, dict) else None
+            unit_label = "時間" if tis_window_unit.startswith("hour") else "日"
+            if window_since or window_until:
+                md.append(f"*対象期間: {window_since or '?'} 〜 {window_until or '?'}*")
+
+            top_statuses = sorted(tis_total.items(), key=lambda item: item[1], reverse=True)
+            shown = 0
+            for status_name, duration in top_statuses:
+                if duration <= 0:
+                    continue
+                md.append(f"- {status_name}: {duration:.1f}{unit_label}")
+                shown += 1
+                if shown >= 5:
+                    break
+
+            issue_totals: List[Tuple[str, float]] = []
+            for row in tis_issues:
+                if not isinstance(row, dict):
+                    continue
+                key = str(row.get("key") or "(unknown)")
+                durations = row.get("byStatus") or {}
+                if not isinstance(durations, dict):
+                    continue
+                total_duration = sum(float(v) for v in durations.values() if isinstance(v, (int, float)))
+                if total_duration > 0:
+                    issue_totals.append((key, total_duration))
+
+            if issue_totals:
+                issue_totals.sort(key=lambda item: item[1], reverse=True)
+                md.append("")
+                md.append("### 滞留時間が長い課題 (Top3)")
+                for key, total_duration in issue_totals[:3]:
+                    md.append(f"- {key}: {total_duration:.1f}{unit_label}")
         
         # エビデンス
         if evidence:
             md.append("")
             md.append("## エビデンス (Top)")
-            for e in evidence[:5]:  # Top 5
-                key = e.get('key', '')
-                summary = e.get('summary', '').strip()
-                status = e.get('status', '')
-                days = e.get('days', 0)
-                assignee = e.get('assignee', '')
-                why = e.get('why', '')
-                link = e.get('link', '')
-                
-                label = f"{key} {summary}" if summary else key
-                md.append(f"- {label} | {status} | {days:.1f}d | assignee: {assignee} | why: {why} | {link}")
+
+            evidence_reasons = {}
+            if ai_summary and ai_summary.evidence_reasons:
+                evidence_reasons = {
+                    str(k): v.strip()
+                    for k, v in ai_summary.evidence_reasons.items()
+                    if isinstance(k, str) and isinstance(v, str) and v.strip()
+                }
+
+            def _format_days(raw: object) -> str:
+                if isinstance(raw, (int, float)):
+                    if raw <= 0:
+                        return "0日"
+                    return f"{raw:.1f}日"
+                return "-"
+
+            def _format_due(raw: object) -> Optional[str]:
+                if not raw:
+                    return None
+                if isinstance(raw, str):
+                    return raw.strip() or None
+                return str(raw)
+
+            top_limit = min(len(evidence), 5)
+            for e in evidence[:top_limit]:  # Top evidence entries
+                key = str(e.get('key', '') or '').strip()
+                summary = (e.get('summary') or '').strip()
+                status = (e.get('status') or '').strip() or "未設定"
+                assignee = (e.get('assignee') or '').strip() or "(未割り当て)"
+                priority = (e.get('priority') or '').strip()
+                raw_days = e.get('days')
+                due_raw = e.get('duedate') or e.get('due')
+                due = _format_due(due_raw)
+                days = _format_days(raw_days)
+                reason = evidence_reasons.get(key) or (e.get('why') or e.get('reason') or '').strip()
+                if not reason:
+                    hints = []
+                    if priority:
+                        hints.append(f"優先度{priority}")
+                    if isinstance(raw_days, (int, float)) and raw_days > 0:
+                        hints.append(f"滞留{raw_days:.0f}日")
+                    if due:
+                        hints.append(f"期限 {due}")
+                    if not hints:
+                        reason = "進捗未入力のため状況確認が必要です"
+                    else:
+                        reason = " / ".join(hints) + " のため優先対応が必要です"
+
+                label = f"{key} {summary}".strip() if summary else key or summary or "(No Key)"
+
+                detail_parts = [f"状態: {status}", f"担当: {assignee}", f"滞留: {days}"]
+                if priority:
+                    detail_parts.append(f"優先度: {priority}")
+                if due:
+                    detail_parts.append(f"期限: {due}")
+
+                md.append(f"- **{label}**")
+                md.append(f"  - {' / '.join(detail_parts)}")
+                md.append(f"  - 理由: {reason}")
         
         # 短期アクション
         md.append("")
@@ -228,6 +326,7 @@ def export_metrics_json(
             "targetDoneRate": config.target_done_rate,
             "axis": config.axis_mode,
             "velocity": metrics.velocity,
+            "timeInStatus": metrics.time_in_status,
             "evidence": metrics.evidence,
             "assigneeWorkload": metrics.assignee_workload,
             "extrasAvailable": {
