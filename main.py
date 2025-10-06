@@ -61,6 +61,11 @@ def handle_pubsub_message(data: dict):
         print(f"Pub/Subメッセージの処理中にエラーが発生しました: {e}", file=sys.stderr)
         return "Error processing message", 500
 
+# --- Slack message eventsを処理する関数 ---
+def handle_slack_message(data: dict):
+    
+    pass
+
 
 # --- Cloud Functions / Cloud Run のメインエントリポイント ---
 def main_handler(req):
@@ -70,7 +75,19 @@ def main_handler(req):
     body = req.get_json(silent=True)
     print(f"Request body: {body}")
 
-    if body and "message" in body and "data" in body["message"]:
+    # 1. SlackのURL検証リクエストか判定 (最優先で処理)
+    if body.get("type") == "url_verification":
+        print("Handling Slack URL verification...")
+        return body.get("challenge")
+
+    # 2. Pub/Subメッセージか判定
+    if "message" in body and "data" in body["message"]:
         return handle_pubsub_message(body)
+    
+    # 3. Slackのメッセージイベントか判定
+    #    'event'オブジェクトとその中の'type'キーの存在を確認
+    if body.get("type") == "event_callback" and body.get("event", {}).get("type") == "message":
+        return handle_slack_message(body)
+
     
     return slack_handler.handle(req)
