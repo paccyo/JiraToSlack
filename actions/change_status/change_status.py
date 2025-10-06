@@ -1,6 +1,6 @@
 from util.get_jira_data import GetJiraData
 from util.request_jira import RequestJiraRepository
-from util.get_slack_email import GetSlackUserIdToEmail
+from util.get_slack_data import GetSlackData
 
 
 def change_status(say, client, body, status):
@@ -8,7 +8,7 @@ def change_status(say, client, body, status):
 
     user_id, issue_key = body["user"]["id"], body["actions"][0]["value"]
 
-    get_skack_user_id_to_email = GetSlackUserIdToEmail()
+    get_skack_user_id_to_email = GetSlackData()
     slack_email_to_register = get_skack_user_id_to_email.get_user_email(user_id)
     
     get_jira_data = GetJiraData()
