@@ -81,7 +81,7 @@ class WeeklyAggregateAward:
 
         get_slack_data = GetSlackData()
 
-        channel_id = get_slack_data.get_channel_id("general")
+        channel_id = get_slack_data.get_channel_id("award")
 
 
         # 取得したユーザーIDを 'channel' に指定してDMを送信
