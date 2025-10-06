@@ -2,11 +2,7 @@ import os
 
 from util.get_slack_email import GetSlackUserIdToEmail
 
-# Jiraバックログダッシュボード画像生成関数
-def run_jira_backlog_dashboard():
-    from .jira_backlog_report.main import run_dashboard_and_get_image
-
-    return run_dashboard_and_get_image()
+from commands.jira_backlog_report.main import run_dashboard_and_get_image
 
 
 def register_commands(app):
@@ -96,7 +92,6 @@ def register_commands(app):
 
         # say(responce)
 
-    from . import run_jira_backlog_dashboard
 
     @app.command("/jira_backlog_report")
     def handle_jira_backlog_report_command(ack, body, say):
@@ -112,7 +107,7 @@ def register_commands(app):
             say("処理中...")
             print("LOG: sent '処理中...' message")
             print("LOG: calling run_jira_backlog_dashboard()")
-            image_path = run_jira_backlog_dashboard()
+            image_path = run_dashboard_and_get_image()
             print(f"LOG: run_jira_backlog_dashboard() returned: {image_path}")
             if not image_path or not os.path.exists(image_path):
                 print(f"LOG: image_path invalid or file does not exist: {image_path}")

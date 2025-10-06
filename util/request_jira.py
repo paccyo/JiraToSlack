@@ -14,6 +14,10 @@ class RequestJiraRepository:
         JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN")
         self.project_key = os.getenv("JIRA_PROJECT_KEY")
         try:
+            self.sp_env = os.getenv("JIRA_STORY_POINTS_FIELD")
+        except Exception as e:
+            print(f"error: {e}")
+        try:
             # メールアドレスとAPIトークンで認証し、Jiraに接続
             self.jira_client = JIRA(
                 server=JIRA_SERVER, 
@@ -264,3 +268,37 @@ class RequestJiraRepository:
             print(f"❌ Jira API Error for issue {issue_key}: Status {e.status_code} - {e.text}")
         except Exception as e:
             print(f"❌ An unexpected error occurred: {e}")
+
+
+    def get_scrum_board(self, board_id = 1):
+        print("\n🔎 Scrumボードを検索中...")
+        all_boards = self.jira_client.boards()
+        print(all_boards)
+        scrum_board = None
+        for board in all_boards:
+            # print(board.raw.get("id"))
+            if board.raw.get("id") == board_id:
+                scrum_board = board
+                return scrum_board.raw
+        
+        if not scrum_board:
+            print("❌ Scrumタイプのボードが見つかりませんでした。")
+            return None
+        
+
+    def get_board_active_sprint(self, board_id):
+        print("\n🔎 アクティブなスプリントを検索中...")
+        active_sprints = self.jira_client.sprints(board_id=board_id, state='active')
+        if active_sprints:
+            return active_sprints[0].raw
+        else:
+            print("❌ アクティブなスプリントはありませんでした。")
+            return None
+
+    def get_story_point_field(self):
+        print("\n🔎 ストーリーポイントフィールドを検索中...")
+        all_fields = self.jira_client.fields()
+        for field in all_fields:
+            if field.get("schema", {}).get("custom") == "com.pyxis.greenhopper.jira:jsw-story-points":
+                story_points_field_id = field["id"]
+                break

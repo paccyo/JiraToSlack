@@ -3,18 +3,18 @@ import subprocess
 import sys
 from pathlib import Path
 
-try:
-    from prototype.local_cli.Loder.dotenv_loader import ensure_env_loaded, build_process_env
-except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
-    current = Path(__file__).resolve()
-    for parent in current.parents:
-        if (parent / "prototype").exists():
-            sys.path.append(str(parent))
-            break
-    from prototype.local_cli.Loder.dotenv_loader import ensure_env_loaded, build_process_env  # type: ignore
+# try:
+#     from prototype.local_cli.Loder.dotenv_loader import ensure_env_loaded, build_process_env
+# except ModuleNotFoundError:  # pragma: no cover - fallback for direct execution
+#     current = Path(__file__).resolve()
+#     for parent in current.parents:
+#         if (parent / "prototype").exists():
+#             sys.path.append(str(parent))
+#             break
+#     from prototype.local_cli.Loder.dotenv_loader import ensure_env_loaded, build_process_env  # type: ignore
 
 
-ensure_env_loaded()
+# ensure_env_loaded()
 
 def run_dashboard_and_get_image():
     # ダッシュボード生成スクリプトを実行
