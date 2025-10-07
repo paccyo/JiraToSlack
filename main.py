@@ -9,8 +9,10 @@ from slack_bolt.adapter.google_cloud_functions import SlackRequestHandler
 from google.cloud import firestore
 import commands
 import actions
-from sheduler.main import SchedulerTaskHandler
-from dotenv import load_dotenv
+import events
+
+import scheduler
+
 
 load_dotenv()
 
@@ -34,6 +36,7 @@ app = App(
 db = firestore.Client()
 commands.register_commands(app)
 actions.register_actions(app)
+events.register_events(app)
 slack_handler = SlackRequestHandler(app)
 
 
@@ -45,14 +48,13 @@ def handle_pubsub_message(data: dict):
         message_data = json.loads(message_data_str)
         print(f"Pub/Subからメッセージを受信しました: {message_data}")
 
-        if message_data.get("flag") == "execute_special_task":
-            # ロジックをSchedulerTaskHandlerに委譲
-            task_handler = SchedulerTaskHandler()
-            result = task_handler.execute(app, db, message_data)
-            print(result)
+
         
+        if message_data.get("flag") == "scheduler_events":
+            scheduler.schedule_handler(message_data, app, db)
         else:
             print("フラグが設定されていないか、値が異なります。")
+
 
         return "OK", 200
     except Exception as e:
@@ -68,8 +70,15 @@ def main_handler(req):
     body = req.get_json(silent=True)
     print(f"Request body: {body}")
 
-    if body and "message" in body and "data" in body["message"]:
+    # 1. SlackのURL検証リクエストか判定 (最優先で処理)
+    if body.get("type") == "url_verification":
+        print("Handling Slack URL verification...")
+        return body.get("challenge")
+
+    # 2. Pub/Subメッセージか判定
+    if "message" in body and "data" in body["message"]:
         return handle_pubsub_message(body)
+
     
     return slack_handler.handle(req)
 

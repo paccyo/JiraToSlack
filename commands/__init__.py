@@ -1,6 +1,4 @@
-import os
-
-from util.get_slack_email import GetSlackUserIdToEmail
+from util.get_slack_data import GetSlackData
 
 from commands.jira_backlog_report.main import run_dashboard_and_get_image
 
@@ -22,8 +20,8 @@ def register_commands(app):
         user_name = body["user_name"]
         text = body.get("text", "").strip()
 
-        get_skack_user_id_to_email = GetSlackUserIdToEmail()
-        slack_email_to_register = get_skack_user_id_to_email.get_user_email(user_id)
+        get_skack_data = GetSlackData()
+        slack_email_to_register = get_skack_data.get_user_email(user_id)
 
         try:
             jira_email_to_regester = None

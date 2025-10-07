@@ -3,7 +3,7 @@ import actions.change_status.change_status as change_status
 
 def register_actions(app):
     """
-    Registers all slash commands with the provided app instance.
+    Registers all actions with the provided app instance.
     """
 
     @app.action("move_Todo")
