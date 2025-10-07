@@ -93,7 +93,6 @@ class DashboardOrchestrator:
             if self.enable_logging:
                 print("[Phase 5] Generating AI summary")
             self.ai_summary = generate_ai_summary(
-                self.config,
                 self.jira_metadata,
                 self.core_data,
                 self.metrics,

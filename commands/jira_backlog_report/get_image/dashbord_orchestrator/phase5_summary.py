@@ -10,16 +10,18 @@ from typing import Dict, Any, Optional, List, TYPE_CHECKING, Iterable
 from textwrap import dedent
 from datetime import datetime, date
 
-if TYPE_CHECKING:
-    import google.generativeai as genai_type
+from google import genai
 
-from .types import (
+
+from commands.jira_backlog_report.get_image.dashbord_orchestrator.types import (
     JiraMetadata,
     CoreData,
     MetricsCollection,
     AISummary,
-    EnvironmentConfig,
 )
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -32,35 +34,6 @@ GEMINI_DEBUG = os.getenv("GEMINI_DEBUG", "").lower() in ("1", "true", "yes")
 class SummaryError(Exception):
     """AI要約生成時のエラー"""
     pass
-
-
-def _try_import_genai() -> Optional[Any]:
-    """google-generativeaiのインポートを試行"""
-    try:
-        import google.generativeai as genai
-        return genai
-    except ImportError:
-        if GEMINI_DEBUG:
-            logger.warning("google-generativeai がインストールされていません")
-        return None
-
-
-def _sanitize_api_key(raw_key: Optional[str]) -> Optional[str]:
-    """
-    APIキーをサニタイズ。
-    末尾に#コメントがある場合は除去する。
-    """
-    if not raw_key:
-        return None
-    
-    key = raw_key.strip()
-    
-    # #以降をコメントとして除去
-    if "#" in key:
-        key = key.split("#")[0].strip()
-    
-    return key if key else None
-
 
 def _summarize_velocity(data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     summary: Dict[str, Any] = {}
@@ -181,16 +154,15 @@ def _select_kpis(kpis: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def _build_context(
-    config: EnvironmentConfig,
     metadata: JiraMetadata,
     core_data: CoreData,
     metrics: MetricsCollection
 ) -> Dict[str, Any]:
     """AI要約用のコンテキストを必要十分な情報に絞って構築する。"""
 
-    sprint_name = metadata.sprint.sprint_name or "現在のスプリント"
-    sprint_start = metadata.sprint.sprint_start
-    sprint_end = metadata.sprint.sprint_end
+    sprint_name = metadata.sprint["name"] or "現在のスプリント"
+    sprint_start = metadata.sprint["startDate"]
+    sprint_end = metadata.sprint["endDate"]
 
     remaining_days = 0
     if sprint_end:
@@ -204,7 +176,7 @@ def _build_context(
             remaining_days = 0
 
     done_percent = core_data.totals.completion_rate * 100
-    target_percent = int(config.target_done_rate * 100)
+    target_percent = int(0.8 * 100)
 
     assignees = sorted(
         {
@@ -222,7 +194,7 @@ def _build_context(
     required_daily_burn: Optional[float] = None
     if remaining_days > 0:
         try:
-            target_absolute = int(round(config.target_done_rate * subtasks_total))
+            target_absolute = int(round(0.8 * subtasks_total))
             remaining_to_target = max(0, target_absolute - subtasks_done)
             required_daily_burn = round(remaining_to_target / remaining_days, 2) if remaining_to_target else 0.0
         except Exception:
@@ -252,9 +224,7 @@ def _build_context(
     return context
 
 
-def _generate_summary(
-    genai: Any,
-    api_key: str,
+def _generate_prompt(
     context: Dict[str, Any]
 ) -> Optional[str]:
     """
@@ -269,22 +239,6 @@ def _generate_summary(
         Optional[str]: 生成された要約。失敗時はNone
     """
     try:
-        # Configuration
-        model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
-        
-        timeout_s = float(GEMINI_TIMEOUT)
-        retries = int(GEMINI_RETRIES)
-        temp = float(os.getenv("GEMINI_TEMPERATURE", "0.1"))
-        top_p = float(os.getenv("GEMINI_TOP_P", "0.9"))
-
-        # Use REST transport to avoid gRPC plugin metadata issues
-        genai.configure(api_key=api_key, transport="rest")
-        generation_config = {
-            "temperature": temp,
-            "top_p": top_p,
-            "max_output_tokens": 640
-        }
-        
         # プロンプト構築
         assignee_str = ", ".join(context["assignees"]) if context["assignees"] else "(担当者なし)"
 
@@ -352,68 +306,20 @@ def _generate_summary(
             """
         )
         
-        # API呼び出しロジック
-        def _call(model_id: str, prompt_text: str) -> Optional[str]:
-            m = genai.GenerativeModel(model_id, generation_config=generation_config)
-            last_err: Optional[Exception] = None
-            
-            for attempt in range(retries + 1):
-                try:
-                    out = m.generate_content(prompt_text, request_options={"timeout": timeout_s})
-                    text = (getattr(out, "text", None) or "").strip()
-                    
-                    if not text:
-                        # try concatenating from candidates
-                        cand_texts = []
-                        for c in getattr(out, "candidates", []) or []:
-                            parts = getattr(getattr(c, "content", None), "parts", []) or []
-                            frag = "".join(getattr(p, "text", "") for p in parts)
-                            if frag:
-                                cand_texts.append(frag)
-                        text = "\n".join(t for t in cand_texts if t).strip()
-                    
-                    if text:
-                        return text
-                        
-                except Exception as e:
-                    last_err = e
-                    if GEMINI_DEBUG:
-                        logger.warning(f"Gemini API 試行 {attempt+1}/{retries+1} 失敗: {e}")
-                
-                # backoff
-                if attempt < retries:
-                    import time
-                    time.sleep(0.6 * (attempt + 1))
-            
-            # if all attempts failed
-            if GEMINI_DEBUG and last_err:
-                logger.warning(f"Gemini API エラー (model={model_id}): {last_err}")
-            
-            return None
-        
-        # モデルフォールバック候補
-        default_fallback = "gemini-1.5-flash-001"
-        fallback_model = os.getenv("GEMINI_FALLBACK_MODEL", default_fallback)
-        models_chain: List[str] = [model_name]
-        if fallback_model and fallback_model != model_name:
-            models_chain.append(fallback_model)
-        for alt in ("gemini-2.0-flash", "gemini-1.5-flash"):
-            if alt not in models_chain:
-                models_chain.append(alt)
 
         # コンテキスト縮小（主要指標のみ）
-        compact_context = {
-            "sprint_name": context.get("sprint_name"),
-            "remaining_days": context.get("remaining_days"),
-            "done_percent": context.get("done_percent"),
-            "target_done_rate": context.get("target_done_rate"),
-            "subtasks_total": context.get("subtasks_total"),
-            "subtasks_done": context.get("subtasks_done"),
-            "subtasks_not_done": context.get("subtasks_not_done"),
-            "risks": context.get("risks"),
-            "top_evidence": context.get("top_evidence"),
-            "workload": context.get("workload"),
-        }
+        # compact_context = {
+        #     "sprint_name": context.get("sprint_name"),
+        #     "remaining_days": context.get("remaining_days"),
+        #     "done_percent": context.get("done_percent"),
+        #     "target_done_rate": context.get("target_done_rate"),
+        #     "subtasks_total": context.get("subtasks_total"),
+        #     "subtasks_done": context.get("subtasks_done"),
+        #     "subtasks_not_done": context.get("subtasks_not_done"),
+        #     "risks": context.get("risks"),
+        #     "top_evidence": context.get("top_evidence"),
+        #     "workload": context.get("workload"),
+        # }
 
         def _build_prompt(ctx: Dict[str, Any]) -> str:
             return (
@@ -426,44 +332,27 @@ def _generate_summary(
                 + "\n上記JSONデータのみを根拠として、出力形式に厳密に従い分析結果を出力してください。"
             )
 
-        # 試行シーケンス: full -> compact (同モデル) -> 次モデル full -> 次モデル compact
-        attempts_plan: List[tuple[str, str]] = []  # (model, mode)
-        for mid in models_chain:
-            attempts_plan.append((mid, "full"))
-            attempts_plan.append((mid, "compact"))
 
-        last_text: Optional[str] = None
-        for mid, mode in attempts_plan:
-            prompt_to_use = _build_prompt(context if mode == "full" else compact_context)
-            text = _call(mid, prompt_to_use)
-            if text:
-                if GEMINI_DEBUG:
-                    logger.info(f"[Phase 5][AI] 成功 model={mid} mode={mode}")
-                return text
-            else:
-                if GEMINI_DEBUG:
-                    logger.warning(f"[Phase 5][AI Retry] 空応答 model={mid} mode={mode}")
-        
-        if GEMINI_DEBUG:
-            logger.error("[Phase 5][AI] すべてのモデル/モード試行で空応答")
-        return last_text
-        
+        prompt_to_use = _build_prompt(context)
+
+        return prompt_to_use
+
+
     except Exception as e:
         if GEMINI_DEBUG:
-            logger.error(f"要約生成エラー: {e}")
+            logger.error(f"プロンプト構築エラー: {e}")
         return None
 
 
 def _generate_evidence_reasons(
-    genai: Any,
-    api_key: str,
+    genai: genai.Client,
     evidences: List[Dict[str, Any]]
 ) -> Dict[str, str]:
     """
     各エビデンスの重要な理由をGemini APIで生成する。
     
     Args:
-        genai: google.generativeai モジュール
+        genai: google.geni モジュール
         api_key: サニタイズ済みAPIキー
         evidences: エビデンスのリスト
     
@@ -477,7 +366,7 @@ def _generate_evidence_reasons(
         return {}
     
     try:
-        model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+        model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         timeout_s = float(GEMINI_TIMEOUT)
         temp = float(os.getenv("GEMINI_TEMPERATURE", "0.2"))
         top_p = float(os.getenv("GEMINI_TOP_P", "0.9"))
@@ -514,17 +403,21 @@ def _generate_evidence_reasons(
             """
         ).strip()
         
-        genai.configure(api_key=api_key, transport="rest")
-        generation_config = {
-            "temperature": temp,
-            "top_p": top_p,
-            "max_output_tokens": 256
-        }
+
+        # genai.configure(api_key=api_key, transport="rest")
+        # generation_config = {
+        #     "temperature": temp,
+        #     "top_p": top_p,
+        #     "max_output_tokens": 256
+        # }
         
         def _call(model_id: str) -> Optional[str]:
             try:
-                m = genai.GenerativeModel(model_id, generation_config=generation_config)
-                out = m.generate_content(prompt, request_options={"timeout": timeout_s})
+                # m = genai.GenerativeModel(model_id, generation_config=generation_config)
+                out = genai.models.generate_content(
+                    mdoel=model_id,
+                    contents=prompt)
+                # out = m.generate_content(prompt, request_options={"timeout": timeout_s})
                 text = (getattr(out, "text", None) or "").strip()
                 
                 if not text:
@@ -584,7 +477,6 @@ def _generate_evidence_reasons(
 
 
 def generate_ai_summary(
-    config: EnvironmentConfig,
     metadata: JiraMetadata,
     core_data: CoreData,
     metrics: MetricsCollection,
@@ -608,98 +500,87 @@ def generate_ai_summary(
     """
     if enable_logging:
         logger.info("Phase 5: AI要約生成を開始します")
-    
-    # Gemini無効化チェック: 既存テスト互換のため無効時は full_text=None を返しフォールバックは行わない
-    def _running_pytest() -> bool:
-        import sys as _sys, os as _os
-        return (
-            'PYTEST_CURRENT_TEST' in _os.environ
-            or any('pytest' in (a or '') for a in _sys.argv[:2])
-        )
 
-    gemini_disabled = os.getenv("GEMINI_DISABLE", "").lower() in ("1", "true", "yes") or config.gemini_disable
-    if gemini_disabled:
-        # テスト互換: pytest 実行時は None, それ以外はフォールバック要約生成（main.py 挙動合わせ）
-        context = _build_context(config, metadata, core_data, metrics)
-        if _running_pytest():
-            if enable_logging:
-                logger.info("Gemini無効化 → テスト環境: 要約None")
-            return AISummary(full_text=None, evidence_reasons={})
-        else:
-            if enable_logging:
-                logger.info("Gemini無効化 → フォールバック要約生成")
-            fb = _build_fallback_summary(context, metrics)
-            return AISummary(full_text=fb, evidence_reasons={})
+    api_key = os.getenv("GEMINI_API_KEY")
     
-    # APIキー取得とサニタイズ
-    raw_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or config.gemini_api_key
-    api_key = _sanitize_api_key(raw_key)
+
+    # try:
+    # 使用するモデルを指定（例: 'gemini-1.5-flash' など）
+    gemini_model = genai.Client(
+        api_key=api_key,
+    )
+
+    # コンテキスト（プロンプト）の構築
+    context = _build_context(metadata, core_data, metrics)
     
-    if not api_key:
-        context = _build_context(config, metadata, core_data, metrics)
-        if _running_pytest():
-            if enable_logging:
-                logger.info("Gemini APIキー未設定 (pytest) → 要約None")
-            return AISummary(full_text=None, evidence_reasons={})
-        else:
-            if enable_logging:
-                logger.info("Gemini APIキー未設定 → フォールバック要約生成")
-            fb = _build_fallback_summary(context, metrics)
-            return AISummary(full_text=fb, evidence_reasons={})
-    
-    # google-generativeaiのインポート
-    genai = _try_import_genai()
-    if not genai:
-        context = _build_context(config, metadata, core_data, metrics)
-        if _running_pytest():
-            if enable_logging:
-                logger.warning("google-generativeai 未導入 (pytest) → 要約None")
-            return AISummary(full_text=None, evidence_reasons={})
-        else:
-            if enable_logging:
-                logger.warning("google-generativeai 未導入 → フォールバック要約生成")
-            fb = _build_fallback_summary(context, metrics)
-            return AISummary(full_text=fb, evidence_reasons={})
-    
-    try:
-        # コンテキスト構築
-        context = _build_context(config, metadata, core_data, metrics)
-        
-        if enable_logging:
-            logger.info("[Phase 5] AI要約を生成中...")
-        
-        full_text = _generate_summary(genai, api_key, context)
-        if not full_text and not _running_pytest():
-            # 本番挙動: 失敗時フォールバック
-            if enable_logging:
-                logger.info("Gemini応答空 → フォールバック要約生成")
-            full_text = _build_fallback_summary(context, metrics)
-        
-        # エビデンス理由生成
-        evidence_reasons = {}
-        if hasattr(metrics, 'evidence') and metrics.evidence:
-            if enable_logging:
-                logger.info(f"[Phase 5] {len(metrics.evidence)} 件のエビデンス理由を生成中...")
-            evidence_reasons = _generate_evidence_reasons(genai, api_key, metrics.evidence)
-        
-        if enable_logging:
-            if full_text:
-                logger.info("[Phase 5] AI要約生成が完了しました")
-            else:
-                logger.info("[Phase 5] AI要約は生成されませんでした")
-        
-        return AISummary(full_text=full_text, evidence_reasons=evidence_reasons)
-        
-    except Exception as e:
-        if enable_logging:
-            logger.error(f"AI要約生成エラー: {e}")
-        # エラーが発生しても続行できるようにNoneまたはフォールバック
-        return AISummary(
-            full_text=None if _running_pytest() else _build_fallback_summary(
-                _build_context(config, metadata, core_data, metrics), metrics
-            ),
-            evidence_reasons={}
+    # 要約を生成
+    if enable_logging:
+        logger.info("Gemini APIを呼び出し、要約を生成しています...")
+    model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    prompt = _generate_prompt(context=context)
+    response = gemini_model.models.generate_content(
+        model=model_name,
+        contents=prompt
         )
+    full_text = response.text
+
+    # エビデンス理由の生成
+    evidence_reasons = {}
+    if hasattr(metrics, 'evidence') and metrics.evidence:
+        if enable_logging:
+            logger.info(f"{len(metrics.evidence)}件のエビデンス理由を生成しています...")
+        evidence_reasons = _generate_evidence_reasons(gemini_model, metrics.evidence)
+
+    if enable_logging:
+        logger.info("AI要約の生成が完了しました。")
+    
+    return AISummary(full_text=full_text, evidence_reasons=evidence_reasons)
+
+    # except Exception as e:
+    #     if enable_logging:
+    #         logger.error(f"AI要約の生成中に予期せぬエラーが発生しました: {e}")
+    #     # エラー発生時はからの要約を返す
+    #     return AISummary(full_text=None, evidence_reasons={})
+    
+    # try:
+    #     # コンテキスト構築
+    #     context = _build_context(config, metadata, core_data, metrics)
+        
+    #     if enable_logging:
+    #         logger.info("[Phase 5] AI要約を生成中...")
+        
+    #     full_text = _generate_summary(genai, api_key, context)
+    #     if not full_text and not _running_pytest():
+    #         # 本番挙動: 失敗時フォールバック
+    #         if enable_logging:
+    #             logger.info("Gemini応答空 → フォールバック要約生成")
+    #         full_text = _build_fallback_summary(context, metrics)
+        
+    #     # エビデンス理由生成
+    #     evidence_reasons = {}
+    #     if hasattr(metrics, 'evidence') and metrics.evidence:
+    #         if enable_logging:
+    #             logger.info(f"[Phase 5] {len(metrics.evidence)} 件のエビデンス理由を生成中...")
+    #         evidence_reasons = _generate_evidence_reasons(genai, api_key, metrics.evidence)
+        
+    #     if enable_logging:
+    #         if full_text:
+    #             logger.info("[Phase 5] AI要約生成が完了しました")
+    #         else:
+    #             logger.info("[Phase 5] AI要約は生成されませんでした")
+        
+    #     return AISummary(full_text=full_text, evidence_reasons=evidence_reasons)
+        
+    # except Exception as e:
+    #     if enable_logging:
+    #         logger.error(f"AI要約生成エラー: {e}")
+    #     # エラーが発生しても続行できるようにNoneまたはフォールバック
+    #     return AISummary(
+    #         full_text=None if _running_pytest() else _build_fallback_summary(
+    #             _build_context(config, metadata, core_data, metrics), metrics
+    #         ),
+    #         evidence_reasons={}
+    #     )
 
 
 def _build_fallback_summary(context: Dict[str, Any], metrics: MetricsCollection) -> str:
