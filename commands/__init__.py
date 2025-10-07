@@ -94,7 +94,7 @@ def register_commands(app):
 
 
     @app.command("/jira_backlog_report")
-    def handle_jira_backlog_report_command(ack, body, say):
+    def handle_jira_backlog_report_command(ack, client, body, say):
         print("LOG: /jira_backlog_report command received")
         try:
             ack()
@@ -107,24 +107,24 @@ def register_commands(app):
             say("処理中...")
             print("LOG: sent '処理中...' message")
             print("LOG: calling run_jira_backlog_dashboard()")
-            image_path = run_dashboard_and_get_image()
-            print(f"LOG: run_jira_backlog_dashboard() returned: {image_path}")
-            if not image_path or not os.path.exists(image_path):
-                print(f"LOG: image_path invalid or file does not exist: {image_path}")
-                say("画像生成に失敗しました")
-                print("LOG: sent '画像生成に失敗しました' message")
-                return
+            image_bytes = run_dashboard_and_get_image()
+            print(f"LOG: run_jira_backlog_dashboard() returned: {image_bytes}")
+            # if not image_path or not os.path.exists(image_path):
+            #     print(f"LOG: image_path invalid or file does not exist: {image_path}")
+            #     say("画像生成に失敗しました")
+            #     print("LOG: sent '画像生成に失敗しました' message")
+            #     return
             channel_id = body.get("channel_id")
-            if not channel_id:
-                print(f"LOG: channel_id not found in body: {body}")
-                say("Slackリクエストにchannel_idが含まれていません")
-                return
+            # if not channel_id:
+            #     print(f"LOG: channel_id not found in body: {body}")
+            #     say("Slackリクエストにchannel_idが含まれていません")
+            #     return
             try:
-                print(f"LOG: uploading image from path: {image_path} to channel: {channel_id}")
-                app.client.files_upload_v2(
+                print(f"LOG: uploading image from path: {image_bytes} to channel: {channel_id}")
+                client.files_upload_v2(
                     channel=channel_id,
-                    file=image_path,
-                    filename=os.path.basename(image_path),
+                    content=image_bytes,
+                    filename="generated_image.png",
                     title="Jiraバックログダッシュボード",
                     initial_comment="Jiraバックログダッシュボードをアップロードしました",
                 )

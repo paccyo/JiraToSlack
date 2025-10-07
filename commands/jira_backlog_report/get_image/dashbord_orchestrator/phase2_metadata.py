@@ -27,14 +27,15 @@ def get_jira_artifacts():
 
         # --- . 最初のScrumボードを探す ---
         board_data = get_jira_data.get_scrum_board(1)
-        
+        board_data["boards_count"] = 1
+
         print(f"  -> 発見: '{board_data.get('name')}' (ID: {board_data.get('id')})")
 
         # --- 3. アクティブなスプリントを探す ---
         print("🔎 アクティブなスプリントを検索中...")
         active_sprint_data = None
         active_sprint_data = get_jira_data.get_board_active_sprint(board_id=board_data.get("id"))
-        
+        active_sprint_data["active_sprints_count"] = 1
         # --- 4. プロジェクトキーを取得 ---
         project_key = board_data.get("location", {}).get("projectKey")
         if project_key:
