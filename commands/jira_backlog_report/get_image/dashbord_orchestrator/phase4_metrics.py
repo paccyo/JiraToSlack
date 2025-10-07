@@ -10,13 +10,9 @@ from typing import Dict, Any, Optional, List, Tuple, TYPE_CHECKING
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
-if TYPE_CHECKING:
-    try:
-        from Loder.jira_client import JiraClient  # type: ignore
-    except Exception:  # pragma: no cover
-        from ..Loder.jira_client import JiraClient  # type: ignore
 
-from .types import AuthContext, JiraMetadata, CoreData, MetricsCollection
+from util.request_jira import RequestJiraRepository
+from commands.jira_backlog_report.get_image.dashbord_orchestrator.types import AuthContext, JiraMetadata, CoreData, MetricsCollection
 
 
 logger = logging.getLogger(__name__)
@@ -38,80 +34,69 @@ class MetricQuery:
 
 
 def collect_metrics(
-    auth: AuthContext,
     metadata: JiraMetadata,
     core_data: CoreData,
-    enable_logging: bool = False
 ) -> MetricsCollection:
-    """
-    各種メトリクスを並列で収集する。
+    # """
+    # 各種メトリクスを並列で収集する。
     
-    Args:
-        auth: 認証コンテキスト
-        metadata: Jiraメタデータ
-        core_data: コアデータ
-        enable_logging: ログ出力を有効化するかどうか
+    # Args:
+    #     auth: 認証コンテキスト
+    #     metadata: Jiraメタデータ
+    #     core_data: コアデータ
+    #     enable_logging: ログ出力を有効化するかどうか
     
-    Returns:
-        MetricsCollection: 収集したメトリクス
+    # Returns:
+    #     MetricsCollection: 収集したメトリクス
     
-    Raises:
-        MetricsError: メトリクス収集に失敗した場合
-    """
-    if enable_logging:
-        logger.info("[Phase 4] メトリクス収集を開始します")
+    # Raises:
+    #     MetricsError: メトリクス収集に失敗した場合
+    # """
     
-    try:
-        try:
-            from Loder.jira_client import JiraClient  # type: ignore
-        except Exception:  # pragma: no cover
-            from ..Loder.jira_client import JiraClient  # type: ignore
-        client = JiraClient()
-        sprint_id = metadata.sprint.sprint_id
+    # try:
+
+        # print(metadata.sprint)
+        sprint_id = metadata.sprint["id"]
         project_key = metadata.project_key
         
         # メトリクスクエリを定義
         queries = _build_metric_queries(sprint_id, project_key)
-        
-        if enable_logging:
-            logger.info(f"[Phase 4] {len(queries)} 個のメトリクスクエリを並列実行します")
+
         
         # 並列実行
-        results = _execute_queries_parallel(client, queries, enable_logging)
+        results = _execute_queries_parallel(queries)
         
         # 結果を集約
         metrics = _aggregate_metrics(results, core_data)
 
         # Time-in-Status (cycle time) 計算
-        try:
-            scope = os.getenv("TIS_SCOPE", "sprint")
-            unit = os.getenv("TIS_UNIT", "days")
-            if enable_logging:
-                logger.info(
-                    "[Phase 4] Time-in-status集計を開始 scope=%s unit=%s",
-                    scope,
-                    unit,
-                )
-            metrics.time_in_status = _calculate_time_in_status(
-                client,
-                metadata,
-                unit=unit,
-                scope=scope,
-                enable_logging=enable_logging
+        # try:
+        scope = os.getenv("TIS_SCOPE", "sprint")
+        unit = os.getenv("TIS_UNIT", "days")
+        
+        print(
+            "[Phase 4] Time-in-status集計を開始 scope=%s unit=%s",
+            scope,
+            unit,
+        )
+        metrics.time_in_status = _calculate_time_in_status(
+            metadata,
+            unit=unit,
+            scope=scope,
+        )
+        # print(metrics)
+        if metrics.time_in_status:
+            total_statuses = len(metrics.time_in_status.get("totalByStatus") or {})
+            total_issues = len(metrics.time_in_status.get("perIssue") or [])
+            print(
+                "[Phase 4] Time-in-status集計完了 statuses=%s issues=%s",
+                total_statuses,
+                total_issues,
             )
-            if enable_logging:
-                if metrics.time_in_status:
-                    total_statuses = len(metrics.time_in_status.get("totalByStatus") or {})
-                    total_issues = len(metrics.time_in_status.get("perIssue") or [])
-                    logger.info(
-                        "[Phase 4] Time-in-status集計完了 statuses=%s issues=%s",
-                        total_statuses,
-                        total_issues,
-                    )
-                else:
-                    logger.info("[Phase 4] Time-in-status集計結果: データが見つかりませんでした")
-        except Exception as tis_error:  # pragma: no cover - ログ目的
-            logger.warning(f"Time-in-status計算でエラー: {tis_error}")
+        else:
+            print("[Phase 4] Time-in-status集計結果: データが見つかりませんでした")
+        # except Exception as tis_error:  # pragma: no cover - ログ目的
+        #     print(f"Time-in-status計算でエラー: {tis_error}")
 
         # 追加: Velocity / Evidence (Burndown削除)
         # Velocity
@@ -119,7 +104,7 @@ def collect_metrics(
             velocity = _calculate_velocity(core_data)
             metrics.velocity = velocity
         except Exception as ve:  # pragma: no cover
-            logger.warning(f"Velocity計算でエラー: {ve}")
+            print(f"Velocity計算でエラー: {ve}")
 
         # Historical Velocity
         try:
@@ -129,41 +114,29 @@ def collect_metrics(
             except ValueError:
                 hv_sample_limit = 6
             hist = _calculate_historical_velocity(
-                client,
-                metadata.board.board_id,
+                metadata.board["id"],
                 metadata.story_points_field,
                 sample_limit=hv_sample_limit,
-                enable_logging=enable_logging
             )
             if hist and metrics.velocity is not None:
                 metrics.velocity["historical"] = hist
-                if enable_logging:
-                    logger.info(
-                        f"[Phase 4] Historical Velocity: avgCompletedSP={hist['averageCompletedSP']} avgPlannedSP={hist.get('averagePlannedSP')} (samples={hist['sampleCount']})"
-                    )
-            elif enable_logging:
-                logger.warning("[Phase 4] Historical Velocity: サンプルが取得できませんでした (フォールバック無効)")
         except Exception as hve:  # pragma: no cover
-            logger.warning(f"Historical Velocity計算でエラー: {hve}")
+            print(f"Historical Velocity計算でエラー: {hve}")
 
         try:
             evidence = _extract_evidence(core_data, results, metadata, top_n=5)
             metrics.evidence = evidence
-            if enable_logging and evidence:
-                logger.info(f"[Phase 4] Evidence抽出 {len(evidence)} 件")
+            
         except Exception as ee:  # pragma: no cover
-            logger.warning(f"Evidence抽出でエラー: {ee}")
+            print(f"Evidence抽出でエラー: {ee}")
         
-        if enable_logging:
-            logger.info("[Phase 4] メトリクス収集が完了しました")
-            logger.info(f"[Phase 4] 収集したメトリクス: {len(results)} 件")
         
         return metrics
         
-    except MetricsError:
-        raise
-    except Exception as e:
-        raise MetricsError(f"予期しないエラーが発生しました: {str(e)}") from e
+    # except MetricsError:
+    #     raise
+    # except Exception as e:
+    #     raise MetricsError(f"予期しないエラーが発生しました: {str(e)}") from e
 
 
 def _build_metric_queries(
@@ -190,7 +163,7 @@ def _build_metric_queries(
     try:
         due_soon_days_val = int(due_soon_days_raw)
     except (TypeError, ValueError):
-        logger.warning("DUE_SOON_DAYS の値 '%s' を整数に変換できませんでした。デフォルトの 7 を使用します", due_soon_days_raw)
+        print("DUE_SOON_DAYS の値 '%s' を整数に変換できませんでした。デフォルトの 7 を使用します", due_soon_days_raw)
         due_soon_days_val = 7
 
     if due_soon_days_val > 0:
@@ -253,9 +226,7 @@ def _build_metric_queries(
 
 
 def _execute_queries_parallel(
-    client: "JiraClient",
     queries: List[MetricQuery],
-    enable_logging: bool
 ) -> Dict[str, int]:
     """
     クエリを並列実行してカウントを取得する。
@@ -274,7 +245,7 @@ def _execute_queries_parallel(
     with ThreadPoolExecutor(max_workers=6) as executor:
         # 各クエリを並列実行
         future_to_query = {
-            executor.submit(_execute_single_query, client, query): query
+            executor.submit(_execute_single_query, query): query
             for query in queries
         }
         
@@ -285,18 +256,16 @@ def _execute_queries_parallel(
                 count = future.result()
                 results[query.name] = count
                 
-                if enable_logging:
-                    logger.info(f"  {query.description}: {count} 件")
+                print(f"  {query.description}: {count} 件")
                     
             except Exception as e:
-                logger.warning(f"クエリ '{query.name}' の実行に失敗: {e}")
+                print(f"クエリ '{query.name}' の実行に失敗: {e}")
                 results[query.name] = 0
     
     return results
 
 
 def _execute_single_query(
-    client: "JiraClient",
     query: MetricQuery
 ) -> int:
     """
@@ -310,13 +279,17 @@ def _execute_single_query(
         int: カウント
     """
     # まずapproximate_countを試す
-    code, count, error = client.count_jql(query.jql, batch=500)
+    # code, count, error = client.count_jql(query.jql, batch=500)
+    request_jira = RequestJiraRepository()
+    issues = request_jira.request_jql(query=query.jql)
+
+    count = issues.total
     
-    if code == 200 and count is not None:
+    if count is not None:
         return count
     
     # 失敗した場合は0を返す
-    logger.warning(f"クエリ実行失敗 ({query.name}): {error}")
+    # print(f"クエリ実行失敗 ({query.name}): {error}")
     return 0
 
 
@@ -381,40 +354,6 @@ def _normalize_story_points(value: Any, default_if_missing: float = 1.0) -> floa
     return sp
 
 
-def _fetch_sprint_issues(
-    client: "JiraClient",
-    sprint_id: int,
-    story_points_field: str,
-    batch: int = 100,
-) -> tuple[int, List[Dict[str, Any]], str]:
-    """Agile API を用いてスプリント内の課題一覧を取得する。"""
-    all_issues: List[Dict[str, Any]] = []
-    start_at = 0
-    last_error = ""
-    while True:
-        params = {
-            "startAt": start_at,
-            "maxResults": batch,
-            "fields": f"status,{story_points_field}",
-        }
-        code, data, err = client.api_get(
-            f"{client.domain}/rest/agile/1.0/sprint/{sprint_id}/issue",
-            params=params,
-        )
-        if code != 200 or not isinstance(data, dict):
-            return code, all_issues, err
-        issues = data.get("issues") or []
-        all_issues.extend(issues)
-        total = data.get("total")
-        if total is not None:
-            if len(all_issues) >= total:
-                break
-        else:
-            if not issues or len(issues) < batch:
-                break
-        start_at += batch
-        last_error = err
-    return 200, all_issues, last_error
 
 
 def _calculate_velocity(core_data: CoreData) -> Dict[str, Any]:
@@ -598,11 +537,10 @@ def _extract_evidence(core_data: CoreData, query_results: Dict[str, int], metada
 
 
 def _calculate_historical_velocity(
-    client: "JiraClient",
     board_id: int,
     story_points_field: str,
     sample_limit: int = 6,
-    enable_logging: bool = False,
+    enable_logging: bool = True,
 ) -> Optional[Dict[str, Any]]:
     """プロジェクト内の全ての閉鎖済みスプリントを対象に、各スプリントの合計SP(全課題)と完了SPを集計し平均を算出する。
 
@@ -618,50 +556,52 @@ def _calculate_historical_velocity(
 
     try:
         if enable_logging:
-            logger.info("[Phase 4] Historical Velocity(ALL issues) 取得開始 board_id=%s sample_limit=%s", board_id, sample_limit)
-        code, data, err = client.api_get(
-            f"{client.domain}/rest/agile/1.0/board/{board_id}/sprint",
-            params={"state": "closed", "maxResults": 200},
-        )
-        if code != 200 or not data:
+            print("[Phase 4] Historical Velocity(ALL issues) 取得開始 board_id=%s sample_limit=%s", board_id, sample_limit)
+
+        request_jira = RequestJiraRepository()
+        data = request_jira.get_sprint(board_id=board_id, state="closed", maxResults=200)
+        # print(data)
+        if not data:
             if enable_logging:
-                logger.warning("[Phase 4] Closed sprint list取得失敗 code=%s err=%s", code, err)
+                print("[Phase 4] Closed sprint list取得失敗")
             return None
-        values = data.get("values") or []
+        values = data
         if not values:
             if enable_logging:
-                logger.warning("[Phase 4] Closed sprint 0件")
+                print("[Phase 4] Closed sprint 0件")
             return None
         # 完了日時降順
         try:
-            values.sort(key=lambda v: v.get("completeDate") or v.get("endDate") or "", reverse=True)
+            values.sort(key=lambda v: v.completeDate or v.endDate or "", reverse=True)
         except Exception as se:
             if enable_logging:
-                logger.warning("[Phase 4] sprint sort error: %s", se)
+                print("[Phase 4] sprint sort error: %s", se)
         samples: List[Dict[str, Any]] = []
         for idx, sp in enumerate(values):
             if len(samples) >= sample_limit:
                 break
-            sid = sp.get("id")
+            sid = sp.id
             if sid is None:
                 continue
-            sname = sp.get("name")
-            comp = sp.get("completeDate") or sp.get("endDate")
+            sname = sp.name
+            comp = sp.completeDate or sp.endDate
             if enable_logging:
-                logger.info("[Phase 4] Sprint集計開始 id=%s name=%s complete=%s", sid, sname, comp)
-            fetch_code, issues, fetch_err = _fetch_sprint_issues(client, sid, story_points_field, batch=100)
-            if fetch_code != 200:
-                if enable_logging:
-                    logger.warning("[Phase 4] Sprint id=%s Agile API取得失敗 code=%s err=%s -> search fallback", sid, fetch_code, fetch_err)
-                fallback_jql = f"Sprint={sid}"
-                fetch_code, issues, fetch_err = client.search_paginated(fallback_jql, ["status", story_points_field], batch=200)
-            if fetch_code != 200:
-                if enable_logging:
-                    logger.warning("[Phase 4] Sprint id=%s 課題取得失敗 code=%s err=%s", sid, fetch_code, fetch_err)
-                continue
+                print("[Phase 4] Sprint集計開始 id=%s name=%s complete=%s", sid, sname, comp)
+            # fetch_code, issues, fetch_err = _fetch_sprint_issues(client, sid, story_points_field, batch=100)
+            issues = request_jira.request_jql(query=f"Sprint={sid}", fields=story_points_field)
+            # if fetch_code != 200:
+                # if enable_logging:
+                #     print("[Phase 4] Sprint id=%s Agile API取得失敗 code=%s err=%s -> search fallback", sid, fetch_code, fetch_err)
+                # fallback_jql = f"Sprint={sid}"
+                # fetch_code, issues, fetch_err = client.search_paginated(fallback_jql, ["status", story_points_field], batch=200)
+            # if fetch_code != 200:
+            #     if enable_logging:
+            #         print("[Phase 4] Sprint id=%s 課題取得失敗 code=%s err=%s", sid, fetch_code, fetch_err)
+            #     continue
             planned = 0.0
             completed = 0.0
-            for issue in issues:
+            for issue_data in issues:
+                issue = issue_data.raw
                 flds = (issue or {}).get("fields", {})
                 sp_raw = flds.get(story_points_field)
                 sp_val = _normalize_story_points(sp_raw)
@@ -670,7 +610,7 @@ def _calculate_historical_velocity(
                     completed += sp_val
             if planned == 0 and completed == 0:
                 if enable_logging:
-                    logger.info("[Phase 4] Sprint id=%s 課題0件 -> サンプル除外 (issues=%d)", sid, len(issues))
+                    print("[Phase 4] Sprint id=%s 課題0件 -> サンプル除外 (issues=%d)", sid, len(issues))
                 continue
             rate = (completed / planned) if planned > 0 else 0.0
             sample = {
@@ -682,10 +622,10 @@ def _calculate_historical_velocity(
             }
             samples.append(sample)
             if enable_logging:
-                logger.info("[Phase 4] Sprint集計完了 id=%s planned=%.2f completed=%.2f rate=%.1f%%", sid, sample["plannedSP"], sample["completedSP"], rate*100)
+                print("[Phase 4] Sprint集計完了 id=%s planned=%.2f completed=%.2f rate=%.1f%%", sid, sample["plannedSP"], sample["completedSP"], rate*100)
         if not samples:
             if enable_logging:
-                logger.warning("[Phase 4] Historical Velocity: 有効サンプル0件 (全closed sprint SP=0?)")
+                print("[Phase 4] Historical Velocity: 有効サンプル0件 (全closed sprint SP=0?)")
             return None
         avg_completed = sum(s["completedSP"] for s in samples) / len(samples)
         avg_planned = sum(s["plannedSP"] for s in samples) / len(samples)
@@ -696,12 +636,12 @@ def _calculate_historical_velocity(
             "samples": samples,
         }
         if enable_logging:
-            logger.info(
+            print(
                 "[Phase 4] Historical Velocity集計完了 sampleCount=%d averageCompletedSP=%.2f averagePlannedSP=%.2f", result["sampleCount"], result["averageCompletedSP"], result["averagePlannedSP"]
             )
         return result
     except Exception as e:  # pragma: no cover
-        logger.warning("Historical velocity計算失敗: %s", e)
+        print("Historical velocity計算失敗: %s", e)
         return None
 
 
@@ -750,15 +690,14 @@ def _is_done_status_name(name: Optional[str]) -> bool:
 
 
 def _calculate_time_in_status(
-    client: "JiraClient",
     metadata: JiraMetadata,
     unit: str = "days",
     scope: str = "sprint",
-    enable_logging: bool = False,
+    enable_logging: bool = True,
 ) -> Optional[Dict[str, Any]]:
-    """各ステータスへの滞留時間を集計する。"""
+        """各ステータスへの滞留時間を集計する。"""
 
-    try:
+    # try:
         unit_normalized = (unit or "days").strip().lower()
         if unit_normalized not in {"hours", "days"}:
             unit_normalized = "days"
@@ -767,7 +706,7 @@ def _calculate_time_in_status(
         utc_now = datetime.now(tz=timezone.utc)
 
         if enable_logging:
-            logger.info(
+            print(
                 "[Phase 4] Time-in-status: target scope=%s unit=%s",
                 scope_normalized,
                 unit_normalized,
@@ -777,27 +716,28 @@ def _calculate_time_in_status(
             project_key = metadata.project_key
             if not project_key:
                 if enable_logging:
-                    logger.warning("[Phase 4] Time-in-status: project scope だが project_key が取得できません")
+                    print("[Phase 4] Time-in-status: project scope だが project_key が取得できません")
                 return None
             jql = f"project={project_key}"
             calc_since = utc_now - timedelta(days=14)
             calc_until = utc_now
         else:
-            sprint_id = metadata.sprint.sprint_id
+            sprint_id = metadata.sprint["id"]
             if sprint_id is None:
                 if enable_logging:
-                    logger.warning("[Phase 4] Time-in-status: sprint ID が不明のため計算をスキップします")
+                    print("[Phase 4] Time-in-status: sprint ID が不明のため計算をスキップします")
                 return None
             jql = f"Sprint={sprint_id}"
-            calc_since = _to_utc(_parse_iso8601(metadata.sprint.sprint_start))
-            calc_until = _to_utc(_parse_iso8601(metadata.sprint.sprint_end))
+            print(metadata.sprint)
+            calc_since = _to_utc(_parse_iso8601(metadata.sprint["startDate"]))
+            calc_until = _to_utc(_parse_iso8601(metadata.sprint["endDate"]))
             if calc_since is None:
                 calc_since = utc_now - timedelta(days=14)
             if calc_until is None:
                 calc_until = utc_now
 
         if enable_logging:
-            logger.info(
+            print(
                 "[Phase 4] Time-in-status: JQL=%s window=%s -> %s",
                 jql,
                 calc_since.isoformat(),
@@ -807,45 +747,47 @@ def _calculate_time_in_status(
         if calc_until < calc_since:
             calc_until = calc_since
 
-        code, issues, err = client.search_paginated(jql, ["status"], batch=100)
-        if code != 200:
-            if enable_logging:
-                logger.warning(
-                    "[Phase 4] Time-in-status: 課題取得失敗 code=%s err=%s", code, err
-                )
-            return None
+        request_jira = RequestJiraRepository()
+        issues = request_jira.request_jql(query=jql,fields=["status"])
 
-        if enable_logging:
-            logger.info(
-                "[Phase 4] Time-in-status: 課題取得件数=%s",
-                len(issues),
-            )
+
+        # if code != 200:
+        #     if enable_logging:
+        #         print(
+        #             "[Phase 4] Time-in-status: 課題取得失敗 code=%s err=%s", code, err
+        #         )
+        #     return None
+
+        # if enable_logging:
+        #     print(
+        #         "[Phase 4] Time-in-status: 課題取得件数=%s",
+        #         len(issues),
+        #     )
 
         total_by_status: Dict[str, float] = {}
         per_issue_results: List[Dict[str, Any]] = []
 
         for issue in issues:
+            issue = issue.raw
             issue_id = issue.get("id") or issue.get("key")
             issue_key = issue.get("key") or str(issue_id)
             if not issue_id:
                 per_issue_results.append({"key": issue_key, "byStatus": {}})
                 continue
+            
+            detail_data = request_jira.get_issue(issue_id, expand="changelog")
 
-            detail_code, detail_data, detail_err = client.api_get(
-                f"{client.domain}/rest/api/3/issue/{issue_id}",
-                params={"expand": "changelog"},
-            )
-            if detail_code != 200 or not detail_data:
-                if enable_logging:
-                    logger.warning(
-                        "[Phase 4] Time-in-status: 課題詳細取得失敗 key=%s code=%s err=%s",
-                        issue_key,
-                        detail_code,
-                        detail_err,
-                    )
+            if not detail_data:
+                # if enable_logging:
+                #     print(
+                #         "[Phase 4] Time-in-status: 課題詳細取得失敗 key=%s code=%s err=%s",
+                #         issue_key,
+                #         detail_code,
+                #         detail_err,
+                #     )
                 per_issue_results.append({"key": issue_key, "byStatus": {}})
                 continue
-
+            detail_data = detail_data.raw
             fields = detail_data.get("fields", {})
             created = _to_utc(_parse_iso8601(fields.get("created")))
             current_status_name = ((fields.get("status") or {}).get("name") or "").strip() or "(unknown)"
@@ -915,7 +857,7 @@ def _calculate_time_in_status(
 
         if not total_by_status and not per_issue_results:
             if enable_logging:
-                logger.info("[Phase 4] Time-in-status: 滞留データが取得できませんでした")
+                print("[Phase 4] Time-in-status: 滞留データが取得できませんでした")
             return None
 
         denom = 3600.0 if unit_normalized == "hours" else 86400.0
@@ -932,8 +874,8 @@ def _calculate_time_in_status(
         project_info = None
         if scope_normalized == "sprint":
             sprint_info = {
-                "id": metadata.sprint.sprint_id,
-                "name": metadata.sprint.sprint_name,
+                "id": metadata.sprint["id"],
+                "name": metadata.sprint["name"],
             }
         else:
             project_info = metadata.project_key
@@ -952,7 +894,7 @@ def _calculate_time_in_status(
         }
 
         if enable_logging:
-            logger.info(
+            print(
                 "[Phase 4] Time-in-status: 課題=%d ステータス=%d",
                 len(per_issue_converted),
                 len(total_converted),
@@ -960,10 +902,10 @@ def _calculate_time_in_status(
 
         return result
 
-    except Exception as exc:  # pragma: no cover - 予期せぬ失敗時はNoneにフォールバック
-        if enable_logging:
-            logger.warning("[Phase 4] Time-in-status計算中にエラー: %s", exc)
-        return None
+    # except Exception as exc:  # pragma: no cover - 予期せぬ失敗時はNoneにフォールバック
+    #     if enable_logging:
+    #         print("[Phase 4] Time-in-status計算中にエラー: %s", exc)
+    #     return None
 
 
 def _calculate_assignee_workload(core_data: CoreData) -> Dict[str, Dict[str, Any]]:

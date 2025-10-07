@@ -85,10 +85,8 @@ class DashboardOrchestrator:
             if self.enable_logging:
                 print("[Phase 4] Collecting metrics")
             self.metrics = collect_metrics(
-                self.auth_ctx,
                 self.jira_metadata,
                 self.core_data,
-                enable_logging=self.enable_logging
             )
             
             # Phase 5: AI要約生成

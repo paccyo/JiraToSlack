@@ -65,7 +65,7 @@ def fetch_core_data(
         jql_query = f"sprint = {sprint_id} AND type not in subTaskIssueTypes()"
         fields = ["summary", "issuetype", "status", "subtasks", "assignee"]
         request_jira_repository = RequestJiraRepository()
-        searched_issues = request_jira_repository.request_jql(jql_query, fileds=fields)
+        searched_issues = request_jira_repository.request_jql(jql_query, fields=fields)
         # print(searched_issues)
         # searched_result = searched_issues[0].raw.get("issues", [])
         
@@ -153,7 +153,7 @@ def fetch_core_data(
             parent_assignee_obj = fields.get("assignee")
             # except Exception as e:
             #     print(f"エラーが発生しました: {e}")
-            print("aa",fields)
+            # print("aa",fields)
             parent_data = ParentTask(
                 key=parent_issue.get("key", ""),
                 summary=fields.get("summary", ""),
@@ -230,9 +230,13 @@ def _extract_times_from_changelog(
     if not changelog:
         return None, None
     
-    histories = changelog.get("histories", [])
-    if not histories:
-        return None, None
+    histories = changelog
+    # print(changelog)
+
+    # print(len(changelog))
+    # histories = changelog.get("histories", [])
+    # if not histories:
+    #     return None, None
     
     # 作成日時でソート
     try:

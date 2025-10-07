@@ -32,11 +32,11 @@ class RequestJiraRepository:
             return None
 
 
-    def request_jql(self, query, max_results=False, fileds=None):
+    def request_jql(self, query, max_results=False, fields=None):
         print(f"request jql query: \n{query}")
         try:
             # JQLを実行して課題を検索
-            searched_issues = self.jira_client.search_issues(query, maxResults=max_results, fields=fileds)
+            searched_issues = self.jira_client.search_issues(query, maxResults=max_results, fields=fields)
             print("✅ 検索が完了しました。")
             return searched_issues
         except Exception as e:
@@ -44,7 +44,7 @@ class RequestJiraRepository:
             return None
     
     def get_issue(self, issue_key, fields=None, expand=None):
-        return self.jira_client.issue(issue_key)
+        return self.jira_client.issue(issue_key, fields=fields, expand=expand)
     
     def build_jql_from_json(self, data: dict) -> str:
 
@@ -305,4 +305,22 @@ class RequestJiraRepository:
             if field.get("schema", {}).get("custom") == "com.pyxis.greenhopper.jira:jsw-story-points":
                 story_points_field_id = field["id"]
                 break
+
+    def get_sprint(self, board_id, state=None, maxResults=200):
+
+        try:
+            # sprints()メソッドを呼び出し、state='closed'を指定
+            closed_sprints = self.jira_client.sprints(
+                board_id=board_id,
+                state=state,
+                maxResults=200
+            )
+            
+            print(f"✅ ボードID '{board_id}' の完了済みスプリントを {len(closed_sprints)} 件取得しました。")
+            return closed_sprints
+
+        except JIRAError as e:
+            print(f"❌ Jira APIエラーが発生しました: {e.text}")
+            return None
+
 
