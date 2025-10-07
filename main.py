@@ -13,6 +13,7 @@ import events
 
 import scheduler
 
+from dotenv import load_dotenv
 
 load_dotenv()
 
