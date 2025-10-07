@@ -69,17 +69,20 @@ def main_handler(req):
     リクエストを検査し、Pub/SubかSlackかに応じて処理を振り分ける
     """
     print(f"req: {req}")
+
     body = req.get_json(silent=True)
-    print(f"Request body: {body}")
+    
+    if body:
+        print(f"Request body: {body}")
 
-    # 1. SlackのURL検証リクエストか判定 (最優先で処理)
-    if body.get("type") == "url_verification":
-        print("Handling Slack URL verification...")
-        return body.get("challenge")
+        # 1. SlackのURL検証リクエストか判定 (最優先で処理)
+        if body.get("type") == "url_verification":
+            print("Handling Slack URL verification...")
+            return body.get("challenge")
 
-    # 2. Pub/Subメッセージか判定
-    if "message" in body and "data" in body["message"]:
-        return handle_pubsub_message(body)
+        # 2. Pub/Subメッセージか判定
+        if "message" in body and "data" in body["message"]:
+            return handle_pubsub_message(body)
 
     
     return slack_handler.handle(req)

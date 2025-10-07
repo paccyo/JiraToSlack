@@ -18,7 +18,7 @@ from commands.jira_backlog_report.get_image.dashbord_orchestrator.dashbord_orche
 
 # ensure_env_loaded()
 
-def run_dashboard_and_get_image():
+def run_dashboard_and_get_image(say):
     # ダッシュボード生成スクリプトを実行
     try:
         # repo_root = Path(__file__).resolve().parents[2]
@@ -30,7 +30,7 @@ def run_dashboard_and_get_image():
         #     env=base_env,
         # )
         dashboard_orchestrator = DashboardOrchestrator(enable_logging=True)
-        image_bytes = dashboard_orchestrator.run()
+        image_bytes = dashboard_orchestrator.run(say)
     except Exception as e:
         print(f"ダッシュボード生成に失敗しました: {e}")
         return None

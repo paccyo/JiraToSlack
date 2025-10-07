@@ -22,7 +22,7 @@ class DashboardOrchestrator:
         """
         self.enable_logging = enable_logging
     
-    def run(self) -> Path:
+    def run(self, say) -> Path:
         """
         全フェーズを実行してダッシュボードを生成
         
@@ -42,6 +42,7 @@ class DashboardOrchestrator:
             # self.config, self.auth_ctx = setup_environment()
             
             # Phase 2: メタデータ取得
+            say("データを取得中")
             if self.enable_logging:
                 print("[Phase 2] Fetching Jira metadata")
             jira_metadata = get_jira_artifacts()
@@ -53,24 +54,27 @@ class DashboardOrchestrator:
                 jira_metadata,
             )
             
+            say("集計中")
             # Phase 4: メトリクス収集
             if self.enable_logging:
                 print("[Phase 4] Collecting metrics")
             metrics = collect_metrics(
-                self.jira_metadata,
-                self.core_data,
+                jira_metadata,
+                core_data,
             )
             
+            say("AIによる要約を生成")
             # Phase 5: AI要約生成
             if self.enable_logging:
                 print("[Phase 5] Generating AI summary")
             ai_summary = generate_ai_summary(
-                self.jira_metadata,
-                self.core_data,
-                self.metrics,
+                jira_metadata,
+                core_data,
+                metrics,
                 enable_logging=self.enable_logging
             )
             
+            say("画像出力中")
             # Phase 6: 画像描画
             if self.enable_logging:
                 print("[Phase 6] Rendering dashboard")
@@ -104,4 +108,4 @@ class DashboardOrchestrator:
         
         except Exception as e:
             error_msg = f"Dashboard generation failed: {e}"
-            print(f"❌ {error_msg}", exc_info=True)
+            print(f"❌ {error_msg}")

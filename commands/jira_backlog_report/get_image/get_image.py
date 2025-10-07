@@ -23,7 +23,7 @@ def run_dashboard_generation(enable_logging: bool = True) -> int:
     
     except Exception as e:
         if enable_logging:
-            print(f"❌ Unexpected error: {e}", exc_info=True)
+            print(f"❌ Unexpected error: {e}")
         return 1
 
 
