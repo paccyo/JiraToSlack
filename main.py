@@ -68,6 +68,7 @@ def main_handler(req):
     """
     リクエストを検査し、Pub/SubかSlackかに応じて処理を振り分ける
     """
+    print(f"req: {req}")
     body = req.get_json(silent=True)
     print(f"Request body: {body}")
 
@@ -82,8 +83,3 @@ def main_handler(req):
 
     
     return slack_handler.handle(req)
-
-
-# Cloud Functions entry point shim (for gcloud --entry-point=handle_slack_events)
-def handle_slack_events(req):
-    return main_handler(req)
