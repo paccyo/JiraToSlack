@@ -144,16 +144,51 @@ def draw_png(
     gap = 8
     
     def try_load_font(size: int) -> ImageFont.ImageFont:
+        # --- Bundled Font Path ---
+        try:
+            from pathlib import Path
+            
+            # Assumes phase6_dashboard.py is 4 levels deep from the project root
+            project_root = Path(__file__).resolve().parents[4]
+            font_dir = project_root / "assets" / "fonts"
+            
+            logger.info(f"[Font Debug] Calculated project root: {project_root}")
+            logger.info(f"[Font Debug] Checking for fonts in: {font_dir}")
+
+            bundled_font_path_otf = font_dir / "NotoSansJP-Regular.otf"
+            bundled_font_path_ttf = font_dir / "NotoSansJP-Regular.ttf"
+
+            logger.info(f"[Font Debug] Checking for OTF: {bundled_font_path_otf}")
+            logger.info(f"[Font Debug] OTF exists: {bundled_font_path_otf.exists()}")
+            
+            if bundled_font_path_otf.exists():
+                logger.info("[Font Debug] Attempting to load OTF font.")
+                return ImageFont.truetype(str(bundled_font_path_otf), size)
+
+            logger.info(f"[Font Debug] Checking for TTF: {bundled_font_path_ttf}")
+            logger.info(f"[Font Debug] TTF exists: {bundled_font_path_ttf.exists()}")
+
+            if bundled_font_path_ttf.exists():
+                logger.info("[Font Debug] Attempting to load TTF font.")
+                return ImageFont.truetype(str(bundled_font_path_ttf), size)
+            
+            logger.warning("[Font Debug] Bundled font not found.")
+
+        except Exception as e:
+            logger.error(f"[Font Debug] Error loading bundled font: {e}", exc_info=True)
+            pass
+        # --- End Bundled Font Path ---
+
+        logger.info("[Font Debug] Bundled font not found or failed, trying system fonts.")
         candidates: List[str] = []
         if os.name == "nt":
             candidates = [
-                r"C:\\Windows\\Fonts\\meiryo.ttc",       # Meiryo (日本語)
-                r"C:\\Windows\\Fonts\\YuGothR.ttc",      # Yu Gothic Regular
-                r"C:\\Windows\\Fonts\\YuGothM.ttc",      # Yu Gothic Medium
-        # Agile APIでスプリント内件数を取得。JQLフィルタも指定可。
-                r"C:\\Windows\\Fonts\\msgothic.ttc",     # MS Gothic
-                r"C:\\Windows\\Fonts\\msmincho.ttc",     # MS Mincho
-                r"C:\\Windows\\Fonts\\segoeui.ttf",      # Fallback (英数字)
+                r"C:\Windows\Fonts\meiryo.ttc",
+                r"C:\Windows\Fonts\YuGothR.ttc",
+                r"C:\Windows\Fonts\YuGothM.ttc",
+                r"C:\Windows\Fonts\msgothic.ttc",
+                r"C:\Windows\Fonts\msmincho.ttc",
+                r"C:\Windows\Fonts\segoeui.ttf",
             ]
         else:
             candidates = [
@@ -170,9 +205,13 @@ def draw_png(
 
         for path in candidates:
             try:
+                logger.info(f"[Font Debug] Trying system font: {path}")
                 return ImageFont.truetype(path, size)
             except Exception:
+                logger.warning(f"[Font Debug] Failed to load system font: {path}")
                 continue
+        
+        logger.error("[Font Debug] All font loading attempts failed. Falling back to default.")
         return ImageFont.load_default()
 
 
