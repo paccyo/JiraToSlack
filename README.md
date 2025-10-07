@@ -1,256 +1,105 @@
-# JiraToSlack
+# JiraToSlack: Jira & Slack連携Bot
 
-## Jira 設定エクスポートと差分比較（Jira Cloud）
+JiraとSlackを連携させるためのBotアプリケーションです。Slackのインターフェースを通じてJiraのタスクを操作・確認したり、定期的なタスク通知やレポートを自動化したりすることで、チームの生産性向上を支援します。
 
-実環境の設定を取得し、開発環境と比較するための補助スクリプトを同梱しています。Windows PowerShell 5.1 前提。
-
-### 1) 実行前準備（環境変数）
-
-PowerShell で以下を設定してください（実行者が管理者権限を持つ環境で）:
-
-```powershell
-$env:JIRA_BASE_URL = "https://<your-domain>.atlassian.net"
-$env:JIRA_EMAIL    = "admin@example.com"
-$env:JIRA_API_TOKEN= "<API_TOKEN>"
-```
-
-APIトークンは Atlassian アカウントのセキュリティ設定から発行してください。
-
-### 2) 接続テスト
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\export_jira_config.ps1 -TestConnection
-```
-
-"接続OK" が表示されれば準備完了です。
-
-### 2.1) 課題件数の取得（JQL: プロジェクト単位）
-
-環境変数に加えて、プロジェクトキーを設定します。
-
-```powershell
-$env:JIRA_PROJECT_KEY = "ABC"
-python .\prototype\local_cli\jira_count_issues.py
-```
-
-出力例:
-
-```
-プロジェクト ABC のタスク総数: 123
-```
-
-> ℹ️ 2024年Q4以降、Jira検索APIは `/rest/api/3/search/jql` のみ利用可能です。本レポジトリのCLI群は `pageToken` によるページネーションで全件取得するよう更新済みのため、旧 `/search` エンドポイントは使用しないでください。
-
-### 3) 設定エクスポート
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\export_jira_config.ps1 -OutputDir .\jira-export-prod -IncludeBoards -IncludeFilters
-```
-
-開発環境でも同様に実行し、例えば `.\jira-export-dev` に保存します。
-
-### 4) 差分比較
-
-```powershell
-python .\scripts\compare_jira_exports.py .\jira-export-prod .\jira-export-dev
-```
-
-出力には、ファイルの有無と、主要リスト（フィールド/優先度/ワークフロー/ボード/フィルターなど）の差分概要が表示されます。詳細差分は各JSONを直接比較してください。
-
-### 注意事項
-
-- 取得対象は設定情報であり、課題データは含みません。
-- 連続呼び出しによる API 制限を避けるため、スクリプト内で短いスリープを入れています。
-- Cloud のエンドポイント仕様変更により一部項目が欠落する場合があります。その際は対象JSONを個別に再取得してください。
-Jiraと連携し、SlackからJiraのタスクを検索したり、定期的にタスクを通知したりするためのBotです。
-Google Cloud Platform (GCP) 上で動作します。
+このアプリケーションはGoogle Cloud Platform (GCP) 上で動作するサーバーレスアーキテクチャを採用しています。
 
 ## 目次
 
-- [アーキテクチャ概要](#アーキテクチャ概要)
-- [前提条件](#前提条件)
-- [GCPセットアップ手順](#gcpセットアップ手順)
-  - [1. gcloud CLI のインストールと設定](#1-gcloud-cli-のインストールと設定)
-  - [2. GCPプロジェクトと課金のセットアップ](#2-gcpプロジェクトと課金のセットアップ)
-  - [3. APIの有効化](#3-apiの有効化)
-  - [4. Secret Manager の設定](#4-secret-manager-の設定)
-  - [5. Firestore の設定](#5-firestore-の設定)
-- [アプリケーションのデプロイ](#アプリケーションのデプロイ)
-- [スケジューラ機能のセットアップ](#スケジューラ機能のセットアップ)
-  - [ステップ1: Pub/Sub トピックの作成](#ステップ1-pubsub-トピックの作成)
-  - [ステップ2: Eventarc トリガーの作成](#ステップ2-eventarc-トリガーの作成)
-  - [ステップ3: Cloud Scheduler の設定](#ステップ3-cloud-scheduler-の設定)
+- [アーキテクチャ](#アーキテクチャ)
+- [ディレクトリ構造](#ディレクトリ構造)
+- [主な機能（詳細）](#主な機能詳細)
+- [セットアップとデプロイ](#セットアップとデプロイ)
 - [環境変数](#環境変数)
 
-## アーキテクチャ概要
+## アーキテクチャ
 
-このアプリケーションは、主に単一の**Cloud Function (第2世代)** としてデプロイされます。Cloud Functions (第2世代) は内部的にCloud Run上で動作するため、スケーラビリティと柔軟性に優れています。
+本システムは、Cloud Functions (第2世代) を中心としたサーバーレスアーキテクチャで構築されています。
 
-主な処理の流れは以下の2通りです。
+- **リクエスト処理**:
+  1.  **Slackからのリクエスト**: ユーザーのスラッシュコマンドやボタン操作は、Cloud FunctionのHTTPエンドポイントに直接送信されます。
+  2.  **スケジュール実行**: Cloud Schedulerが指定時刻にPub/Subトピックへメッセージを送信し、それをEventarcトリガーが検知してCloud Functionを呼び出します。
+- **主要GCPサービス**:
+  - **Cloud Functions (gen2)**: バックエンドロジックを実行します。内部的にはCloud Runで動作します。
+  - **Slack Bolt Framework**: Slackとのインタラクションを処理します。
+  - **Firestore**: ユーザー情報（Slack IDとJira Emailの紐付け）を永続化します。
+  - **Secret Manager**: APIトークンなどの機密情報を安全に保管します。
+  - **Cloud Scheduler / Pub/Sub / Eventarc**: 定期実行タスクの仕組みを実現します。
+  - **Gemini API**: `/jira_get_tasks`コマンドで入力された自然言語をJQL (Jira Query Language) に変換するために利用します。
 
-1.  **Slackからの対話的リクエスト**:
-    -   ユーザーがSlackでスラッシュコマンド (`/jira_get_tasks`など) を実行します。
-    -   SlackがCloud FunctionのHTTPエンドポイントを直接呼び出します。
-    -   Cloud Function内の**Slack Bolt**フレームワークがリクエストを処理し、必要に応じてJira APIを叩き、結果をSlackに返信します。
+## ディレクトリ構造
 
-2.  **スケジュールされたタスク通知**:
-    -   **Cloud Scheduler**が設定されたスケジュール（例: 毎日午前9時）になると、ジョブを実行します。
-    -   ジョブは、特定のメッセージを**Pub/Sub**トピックに送信（Publish）します。
-    -   **Eventarc**がこのPub/Subへのメッセージ発行を検知し、トリガーとして設定されたCloud FunctionのHTTPエンドポイントを呼び出します。このとき、Pub/Subメッセージがリクエストボディに含まれます。
-    -   Cloud Functionはリクエストボディを解析し、スケジューラタスク（全ユーザーのJiraタスクを取得してDMで通知）を実行します。
-
-**その他の主要サービス:**
-- **Firestore**: ユーザー情報（Slack IDとJiraのメールアドレス）を保存するNoSQLデータベース。
-- **Secret Manager**: SlackやJiraのAPIキー、トークンなどの機密情報を安全に保管します。
-- **Cloud Build**: `gcloud functions deploy`コマンドを実行すると、裏側でCloud Buildがソースコードをコンテナイメージにビルドし、Cloud Runにデプロイします。
-
-## 前提条件
-
-- Google Cloud Platform (GCP) アカウント
-- `gcloud` CLI がインストールされていること
-- Python 3.10 以降
-
-## GCPセットアップ手順
-
-### 1. gcloud CLI のインストールと設定
-
-1.  **インストール**:
-    公式ドキュメントに従って、お使いのOSに`gcloud` CLIをインストールしてください。
-    [gcloud CLI インストールガイド](https://cloud.google.com/sdk/docs/install)
-
-2.  **初期化とログイン**:
-    ```bash
-    gcloud init
-    ```
-
-3.  **プロジェクト設定**:
-    ```bash
-    gcloud config set project YOUR_PROJECT_ID
-    ```
-    `YOUR_PROJECT_ID` は実際のプロジェクトIDに置き換えてください。
-
-### 2. GCPプロジェクトと課金のセットアップ
-
-- GCP Consoleで新しいプロジェクトを作成し、課金アカウントをリンクしてください。
-
-### 3. APIの有効化
-
-以下のコマンドを実行して、プロジェクトで必要なAPIを有効化します。
-
-```bash
-gcloud services enable \
-  run.googleapis.com \
-  firestore.googleapis.com \
-  pubsub.googleapis.com \
-  eventarc.googleapis.com \
-  cloudfunctions.googleapis.com \
-  cloudbuild.googleapis.com \
-  secretmanager.googleapis.com \
-  cloudscheduler.googleapis.com
+```
+.
+├── actions/         # Slackのインタラクティブコンポーネント（ボタン等）のアクションを定義
+├── commands/        # Slackのスラッシュコマンドを定義
+├── events/          # Slackのイベント（未使用）
+├── scheduler/       # 定期実行タスク（日次、週次）を定義
+├── util/            # Jira/Slack APIのラッパーやデータ取得などの共通処理
+├── main.py          # アプリケーションのエントリーポイント
+├── requirements.txt # Pythonの依存パッケージリスト
+├── setup.md         # GCPセットアップ手順書
+└── design_spec.md   # システム設計書
 ```
 
-### 4. Secret Manager の設定
+## 主な機能（詳細）
 
-[環境変数](#環境変数)セクションにリストされている各変数に対して、シークレットの作成と値の設定を行います。
+### インタラクティブ機能 (Slackコマンド / アクション)
 
-```bash
-# シークレットを作成 (例: SLACK_BOT_TOKEN)
-gcloud secrets create SLACK_BOT_TOKEN --replication-policy="automatic"
+- **`/jira_get_tasks [自然言語テキスト]`**
+  - **概要**: 自然言語でJiraタスクを検索します。
+  - **処理**: Gemini APIを利用してユーザーの入力（例: 「昨日完了した自分のタスク」）をJQLに変換し、Jira APIで検索して結果を返します。
 
-# シークレットに値を設定
-printf "xoxb-YOUR-SLACK-BOT-TOKEN" | gcloud secrets versions add SLACK_BOT_TOKEN --data-file=-
-```
+- **`/jira_backlog_report`**
+  - **概要**: Jiraのバックログに関するレポートを画像として生成し、Slackに投稿します。
+  - **処理**: `dashbord_orchestrator`がJiraからスプリント情報や課題データを取得・集計し、Pillowライブラリを使って画像を描画します。
 
-### 5. Firestore の設定
+- **`/add_user`, `/del_user`**
+  - **概要**: SlackユーザーとJiraアカウントの紐付けを管理します。
+  - **処理**: Firestoreの`slack_users`コレクションに対して、ユーザー情報の登録・削除を行います。この紐付け情報は、スケジュール機能で個々のユーザーに通知を送る際に使用されます。
 
-1.  GCP ConsoleでFirestoreに移動します。
-2.  「ネイティブモード」を選択してデータベースを作成します。
-3.  ロケーションを選択します（例: `asia-northeast1`）。
+- **ボタンによるステータス変更 (`change_status`)**
+  - **概要**: Botが投稿したタスクメッセージ上のボタン（例: "ToDo", "完了"）をクリックすることで、Jira課題のステータスを直接変更できます。
 
-## アプリケーションのデプロイ
+### スケジュール機能
 
-以下のコマンドで、アプリケーション本体をCloud Functionとしてデプロイします。この時点では、Slackからのリクエストのみを受け付けます。
+Cloud Schedulerによって定期的に実行されるタスクです。
 
-```bash
-gcloud functions deploy jira-slack-bot \
-  --gen2 \
-  --runtime=python311 \
-  --region=asia-northeast1 \
-  --source=. \
-  --entry-point=main_handler \
-  --trigger-http \
-  --allow-unauthenticated \
-  --set-secrets='SLACK_BOT_TOKEN=SLACK_BOT_TOKEN:latest' \
-  --set-secrets='SLACK_SIGNING_SECRET=SLACK_SIGNING_SECRET:latest' \
-  --set-secrets='JIRA_DOMAIN=JIRA_DOMAIN:latest' \
-  --set-secrets='JIRA_EMAIL=JIRA_EMAIL:latest' \
-  --set-secrets='JIRA_API_TOKEN=JIRA_API_TOKEN:latest' \
-  --set-secrets='GEMINI_API_KEY=GEMINI_API_KEY:latest'
-```
+- **`daily_reccomend` (毎日実行)**
+  - **概要**: 登録されている全ユーザーに、その日の推奨タスクをDMで通知します。
+  - **処理**: 各ユーザーの仕掛中タスクの中から、以下のカテゴリに分類して通知します。
+    1.  **今日が期限のタスク**
+    2.  **優先度の高いタスク** (上位3件)
+    3.  **期日が近いタスク** (上位3件)
 
-デプロイが完了すると、HTTPトリガーURLが発行されます。このURLをSlackアプリの管理画面 (Request URL) に設定してください。
+- **`weekly_aggregate_award` (毎週実行)**
+  - **概要**: チームの週次パフォーマンスを集計し、ランキング形式で指定されたチャンネルに報告します。
+  - **処理**: 先週1週間に完了したタスクをユーザーごとに集計し、以下の項目をランキング形式で投稿します。
+    - 完了タスク総数
+    - 合計ストーリーポイント
+    - 期日内完了率
+    - タスクサイズ毎の内訳
 
-## スケジューラ機能のセットアップ
+## セットアップとデプロイ
 
-次に、定期実行タスクのための連携を設定します。
+詳細な手順は `setup.md` を参照してください。
 
-### ステップ1: Pub/Sub トピックの作成
+1. **GCPプロジェクトの準備とAPIの有効化**
+   - `gcloud` CLIをセットアップし、課金が有効なプロジェクトを用意します。
+   - `setup.md` に記載のコマンドを実行し、必要なAPIを有効化します。
 
-まず、Cloud Schedulerからのメッセージを受け取るための中継地点となるPub/Subトピックを作成します。
+2. **Secret Managerの設定**
+   - [環境変数](#環境変数)セクションに記載されている全ての値を、Secret Managerにシークレットとして登録します。
 
-```bash
-gcloud pubsub topics create scheduler-topic
-```
+3. **Firestoreのセットアップ**
+   - GCPコンソールからFirestoreデータベースを「ネイティブモード」で作成します。
 
-### ステップ2: Eventarc トリガーの作成
+4. **アプリケーションのデプロイ**
+   - `setup.md` に記載の `gcloud functions deploy` コマンドを実行します。
+   - デプロイ後に出力される**トリガーURL**を、Slackアプリの `Request URL` に設定します。
 
-次に、上記で作成した`scheduler-topic`にメッセージが発行されたことを検知し、デプロイ済みのCloud Function (`jira-slack-bot`) を呼び出すためのEventarcトリガーを作成します。これがPub/SubとCloud Functionを繋ぐ「接着剤」の役割を果たします。
-
-```bash
-# 環境変数を設定
-export TRIGGER_NAME=scheduler-trigger
-export LOCATION=asia-northeast1 # デプロイしたリージョン
-export FUNCTION_NAME=jira-slack-bot
-export TOPIC_NAME=scheduler-topic
-
-# Eventarcトリガーを作成
-gcloud eventarc triggers create $TRIGGER_NAME \
-  --location=$LOCATION \
-  --destination-run-service=$FUNCTION_NAME \
-  --destination-run-region=$LOCATION \
-  --event-filters="type=google.cloud.pubsub.topic.v1.messagePublished" \
-  --event-filters="topic=$TOPIC_NAME"
-
-#### 必要な権限について
-
-`gcloud`コマンドが自動で権限付与を促してくれますが、裏側では以下の権限が付与されています。
-
-1.  **Cloud Run 起動元 (`roles/run.invoker`)**
-    -   **誰が**: Eventarcが利用するサービスアカウント
-    -   **何に**: デプロイしたCloud Function (`jira-slack-bot`)に対して
-    -   **なぜ**: EventarcがCloud FunctionのHTTPエンドポイントを「呼び出す（起動する）」ためにこの権限が必要です。
-
-2.  **サービスアカウントトークン作成者 (`roles/iam.serviceAccountTokenCreator`)**
-    -   **誰が**: Googleが管理するPub/Subのサービスアカウント
-    -   **何に**: Eventarcが利用するサービスアカウントに対して
-    -   **なぜ**: Pub/SubからEventarc経由でCloud Functionを呼び出す際、リクエストが正当なものであることを証明するためのIDトークンを作成する権限です。
-
-基本的には、`gcloud`が権限付与を求めてきた際に`yes`と答えるだけで、これらの設定は自動的に完了します。
-
-
-### ステップ3: Cloud Scheduler の設定
-
-最後に、指定した時間にPub/Subトピックへメッセージを送るCloud Schedulerジョブを作成します。以下の例では、毎日午前9時にタスクを実行します。
-
-```bash
-gcloud scheduler jobs create pubsub daily-task-scheduler \
-  --schedule="0 9 * * *" \
-  --topic="scheduler-topic" \
-  --message-body='{"message": "flag","data": "nothing","flag": "execute_special_task"}' \
-  --time-zone="Asia/Tokyo"
-```
-
-これで、毎日午前9時に`daily-task-scheduler`が`scheduler-topic`にメッセージを送信し、それをEventarcが検知して`jira-slack-bot`関数が実行される、という一連の流れが完成しました。
+5. **スケジューラ機能のセットアップ**
+   - `setup.md` の手順に従い、Pub/Subトピック、Eventarcトリガー、Cloud Schedulerジョブを作成します。
 
 ## 環境変数
 
@@ -261,6 +110,8 @@ gcloud scheduler jobs create pubsub daily-task-scheduler \
 | `SLACK_BOT_TOKEN`          | Slack BotのOAuthトークン (`xoxb-`で始まる)         |
 | `SLACK_SIGNING_SECRET`     | SlackアプリのSigning Secret                        |
 | `JIRA_DOMAIN`              | Jiraのドメイン (例: `your-domain.atlassian.net`)   |
-| `JIRA_EMAIL`               | Jiraに登録しているメールアドレス                   |
+| `JIRA_EMAIL`               | Jira APIの認証に使用するメールアドレス             |
 | `JIRA_API_TOKEN`           | Jira APIトークン                                   |
 | `GEMINI_API_KEY`           | Google AI Studioで発行したGemini APIキー           |
+| `JIRA_PROJECT_KEY`         | (任意) 対象を特定のJiraプロジェクトに限定する場合のキー |
+| `JIRA_STORY_POINTS_FIELD`  | (任意) ストーリーポイントが格納されているカスタムフィールドID (例: `customfield_10016`) |
