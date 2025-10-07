@@ -1007,6 +1007,9 @@ def draw_png(
     target_done_rate: float,
     extras: Optional[Dict[str, Any]] = None,
 ) -> None:
+    # ======================================================================
+    # セクション: 画像キャンバス初期化 / 色 / 基本レイアウト設定
+    # ======================================================================
     W, H = 1400, 980
     bg = (250, 250, 250)
     img = Image.new("RGB", (W, H), bg)
@@ -1181,6 +1184,9 @@ def draw_png(
                 focus_s_x0, focus_s_x1 = sx, sx + spr_seg_w
             sx += spr_seg_w + sprint_gap
 
+    # ======================================================================
+    # セクション: タスク列 (サブタスク矩形: 完了/未完了 色分け)
+    # ======================================================================
     # Tasks row constrained to the focused sprint x-range
     parents = data.get("parents", [])
     tasks: List[Dict[str, Any]] = []
@@ -1203,6 +1209,9 @@ def draw_png(
         g.rectangle([tx, task_y0 + 3, tx + task_seg_w, task_y1 - 3], fill=fill, outline=None)
         tx += task_seg_w + task_gap
 
+    # ======================================================================
+    # セクション: サマリーバー (完了/未完了割合 + ラベル + 目標線)
+    # ======================================================================
     # Summary bar (Done vs Not Done) with labels — use data-based totals (consistency)
     totals = data.get("totals", {})
     done_cnt = int(totals.get("done", 0))
@@ -1240,6 +1249,9 @@ def draw_png(
     if (focus_s_x1 - (focus_s_x0 + done_w)) > g.textlength(not_label, font=font_sm) + 8:
         center_text(focus_s_x0 + done_w, focus_s_x1, label_y, not_label, font_sm, fill=(255,255,255))
 
+    # ======================================================================
+    # セクション: 軸/グリッド (0/25/50/75/100 tick と count/percent切替)
+    # ======================================================================
     # Axis grid and labels (0,25,50,75,100)
     grid_y0 = sum_y1 + 10
     grid_y1 = grid_y0 + 1
@@ -1285,6 +1297,10 @@ def draw_png(
     velmini_box_w = header_right_w
     bd_box_y0 = padding
     bd_box_h = 110
+
+    # ======================================================================
+    # セクション: 右上 KPI + ミニVelocity (ヘッダ領域内)
+    # ======================================================================
     # mini velocity chart (reserved_h is dynamic based on KPI text height)
     def draw_velocity_mini(x0: int, y0: int, w: int, h: int, vel: Optional[Dict[str, Any]], reserved_h: int) -> None:
         # Apply adapter to handle both new and old velocity formats
@@ -1364,8 +1380,6 @@ def draw_png(
         draw_velocity_mini(velmini_box_x0, mv_y0, velmini_box_w, mv_h, vel_data_hdr, 0)
     except Exception:
         pass
-    # Timestamp will be drawn at footer (moved from header to avoid collisions)
-
     # Title with sprint name and date range (Japanese formatting)
     title = "スプリント"
     if sprint_name:
@@ -1668,6 +1682,10 @@ def draw_png(
     right_x0 = velmini_box_x0
     right_y0 = bd_box_y0 + bd_box_h + 16
     right_w = header_right_w
+    # ======================================================================
+    # セクション: 右カラム 指標 (KPIカード / 担当者ワークロード)
+    # ======================================================================
+    # KPI cards
 
     def draw_kpi_cards(x0: int, y0: int, w: int, h: int, kpis: Dict[str, int]) -> int:
         pad = 8
@@ -1722,6 +1740,7 @@ def draw_png(
     kpi_data = (extras or {}).get("kpis") if extras else {}
     kpi_y1 = draw_kpi_cards(right_x0, right_y0, right_w, kpi_h, kpi_data or {})
 
+    # 担当者別ワークロード
     def draw_workload(x0: int, y0: int, w: int, h: int, wl: Optional[Dict[str, Any]]) -> int:
         if not wl:
             return y0
@@ -1749,7 +1768,10 @@ def draw_png(
     wl_y1 = draw_workload(right_x0, kpi_y1 + 20, right_w, wl_h, wl_data)
     wl_y2 = wl_y1 + wl_h
 
-    # Footer: Evidence table
+    # ======================================================================
+    # セクション: エビデンス表 (TopN 課題)
+    # ======================================================================
+    # Evidence topN
     def draw_evidence(x0: int, y0: int, w: int, h: int, ev: Optional[List[Dict[str, Any]]]) -> None:
         g.text((x0, y0 - 18), "重要エビデンス（Top）", font=font_md, fill=col_text)
         if not ev:
@@ -1847,58 +1869,9 @@ def draw_png(
     evidence = (extras or {}).get("evidence") if extras else None
     draw_evidence(ev_box_x0, ev_box_y0, ev_box_w, ev_box_h, evidence)
 
-    # (moved overlay panel below after caption lines are drawn)
-
-    # Caption (What / So what / Next action) — compact 3 lines with data provenance
-    cap_y = ev_box_y0 + ev_box_h + 16
-    # sprint meta
-    sprint_label = (f"スプリント {sprint_name}" if sprint_name else "スプリント")
-    d0 = fmt_date(sprint_start) if sprint_start else None
-    d1 = fmt_date(sprint_end) if sprint_end else None
-    if d0 and d1:
-        sprint_label = f"{sprint_label} ({d0}-{d1})"
-    # KPI numbers if available
-    kpi_data = (extras or {}).get("kpis", {}) if extras else {}
-    sprint_total = int(kpi_data.get("sprintTotal", 0))
-    sprint_done = int(kpi_data.get("sprintDone", 0))
-    # time-in-status Review avg (days)
-    review_avg = None
-    tis_obj = (extras or {}).get("time_in_status") if extras else None
-    try:
-        per_issue = (tis_obj or {}).get("perIssue") or []
-        sum_map: Dict[str, float] = {}
-        cnt_map: Dict[str, int] = {}
-        for row in per_issue:
-            by = row.get("byStatus") or {}
-            for st, days in by.items():
-                d = float(days) if days is not None else 0.0
-                sum_map[st] = sum_map.get(st, 0.0) + d
-                cnt_map[st] = cnt_map.get(st, 0) + 1
-        # find Review-like key
-        if sum_map:
-            # pick exact 'Review' else any containing 'Review'
-            key_candidates = [k for k in sum_map.keys() if str(k).lower() == "review"] or [k for k in sum_map.keys() if "review" in str(k).lower()]
-            if key_candidates:
-                k0 = key_candidates[0]
-                review_avg = sum_map[k0] / max(1, cnt_map.get(k0, 1))
-    except Exception:
-        pass
-    # Build context for Gemini summary
-    risks_data = (extras or {}).get("risks", {}) if extras else {}
-    # Action recommendations based on data
-    action_suggestions = []
-    hp = int(risks_data.get("highPriorityTodo", 0))
-    od = int(risks_data.get("overdue", 0))
-    ds = int(risks_data.get("dueSoon", 0))
-    if done_rate < target_done_rate:
-        action_suggestions.append("レビュー担当の増員/並列化でスループット改善")
-    if hp > 0:
-        action_suggestions.append(f"高優先度未着手 {hp}件に即時担当割当")
-    if od > 0:
-        action_suggestions.append(f"期限超過 {od}件のエスカレーション")
-    if ds > 0:
-        action_suggestions.append(f"期限接近 {ds}件の優先順位再確認")
-    
+    # ======================================================================
+    # セクション: AI要約用コンテキスト準備 (進捗/KPI/リスク/滞在時間等集約)
+    # ======================================================================
     # 新しいcontextキーの計算
     try:
         kpi_data = (extras or {}).get("kpis", {}) if extras else {}
@@ -2075,29 +2048,81 @@ def draw_png(
     g.text((proj_x0, cap_y + 16), sowhat, font=font_sm, fill=col_text)
     g.text((proj_x0, cap_y + 32), nexta, font=font_sm, fill=col_text)
 
-    # AI summary overlay panel (wrapped text in image) — runs after caption to avoid NameError
+    # ======================================================================
+    # セクション: AI要約オーバーレイパネル (Gemini出力の折り返し描画)
+    # ======================================================================
+    # (moved overlay panel below after caption lines are drawn)
+
+    # Caption (What / So what / Next action) — compact 3 lines with data provenance
+    cap_y = ev_box_y0 + ev_box_h + 16
+    # sprint meta
+    sprint_label = (f"スプリント {sprint_name}" if sprint_name else "スプリント")
+    d0 = fmt_date(sprint_start) if sprint_start else None
+    d1 = fmt_date(sprint_end) if sprint_end else None
+    if d0 and d1:
+        sprint_label = f"{sprint_label} ({d0}-{d1})"
+    # KPI numbers if available
+    kpi_data = (extras or {}).get("kpis", {}) if extras else {}
+    sprint_total = int(kpi_data.get("sprintTotal", 0))
+    sprint_done = int(kpi_data.get("sprintDone", 0))
+    # time-in-status Review avg (days)
+    review_avg = None
+    tis_obj = (extras or {}).get("time_in_status") if extras else None
     try:
-        overlay_enabled = AI_OVERLAY_IN_IMAGE
-        ai_text = (extras or {}).get("ai_full_text") if extras else None
-        if overlay_enabled and isinstance(ai_text, str) and ai_text.strip():
-            # Keep the full AI summary content without truncation
-            try:
-                import re as _re
-                # Remove excessive whitespace but keep all content
-                ai_text = _re.sub(r"\r", "", ai_text)
-                ai_text = _re.sub(r"\n[ \t]*\n+", "\n", ai_text)
-            except Exception:
-                pass
-            panel_x0 = proj_x0
-            panel_w = W - padding - panel_x0
-            # Place directly under evidence to guarantee space
-            panel_y0 = ev_box_y0 + ev_box_h + 12
-            footer_reserve = 28
-            panel_h = max(72, H - padding - footer_reserve - panel_y0)
-            if panel_h >= 24:
-                g.rectangle([panel_x0, panel_y0, panel_x0 + panel_w, panel_y0 + panel_h], outline=col_outline, fill=(245, 245, 245))
-                title = "AI要約 (Gemini)"
-                g.text((panel_x0 + 8, panel_y0 + 6), title, font=font_md, fill=col_text)
+        per_issue = (tis_obj or {}).get("perIssue") or []
+        sum_map: Dict[str, float] = {}
+        cnt_map: Dict[str, int] = {}
+        for row in per_issue:
+            by = row.get("byStatus") or {}
+            for st, days in by.items():
+                d = float(days) if days is not None : 0.0
+                sum_map[st] = sum_map.get(st, 0.0) + d
+                cnt_map[st] = cnt_map.get(st, 0) + 1
+        # find Review-like key
+        if sum_map:
+            # pick exact 'Review' else any containing 'Review'
+            key_candidates = [k for k in sum_map.keys() if str(k).lower() == "review"] or [k for k in sum_map.keys() if "review" in str(k).lower()]
+            if key_candidates:
+                k0 = key_candidates[0]
+                review_avg = sum_map[k0] / max(1, cnt_map.get(k0, 1))
+    except Exception:
+        pass
+    # Build context for Gemini summary
+    risks_data = (extras or {}).get("risks", {}) if extras else {}
+    # Action recommendations based on data
+    action_suggestions = []
+    hp = int(risks_data.get("highPriorityTodo", 0))
+    od = int(risks_data.get("overdue", 0))
+    ds = int(risks_data.get("dueSoon", 0))
+    if done_rate < target_done_rate:
+        action_suggestions.append("レビュー担当の増員/並列化でスループット改善")
+    if hp > 0:
+        action_suggestions.append(f"高優先度未着手 {hp}件に即時担当割当")
+    if od > 0:
+        action_suggestions.append(f"期限超過 {od}件のエスカレーション")
+    if ds > 0:
+        action_suggestions.append(f"期限接近 {ds}件の優先順位再確認")
+    
+    ai_text = (extras or {}).get("ai_full_text") if extras else None
+    if isinstance(ai_text, str) and ai_text.strip():
+        # Keep the full AI summary content without truncation
+        try:
+            import re as _re
+            # Remove excessive whitespace but keep all content
+            ai_text = _re.sub(r"\r", "", ai_text)
+            ai_text = _re.sub(r"\n[ \t]*\n+", "\n", ai_text)
+        except Exception:
+            pass
+        panel_x0 = proj_x0
+        panel_w = W - padding - panel_x0
+        # Place directly under evidence to guarantee space
+        panel_y0 = ev_box_y0 + ev_box_h + 12
+        footer_reserve = 28
+        panel_h = max(72, H - padding - footer_reserve - panel_y0)
+        if panel_h >= 24:
+            g.rectangle([panel_x0, panel_y0, panel_x0 + panel_w, panel_y0 + panel_h], outline=col_outline, fill=(245, 245, 245))
+            title = "AI要約 (Gemini)"
+            g.text((panel_x0 + 8, panel_y0 + 6), title, font=font_md, fill=col_text)
 
                 def wrap_text(text: str, max_width: int, font: ImageFont.ImageFont) -> List[str]:
                     lines: List[str] = []
@@ -2164,6 +2189,9 @@ def draw_png(
     except Exception:
         pass
 
+    # ======================================================================
+    # セクション: フッター (タイムスタンプ)
+    # ======================================================================
     # Footer timestamp (bottom-right)
     try:
         import datetime as _dt
@@ -2173,6 +2201,9 @@ def draw_png(
     except Exception:
         pass
 
+    # ======================================================================
+    # セクション: 画像出力
+    # ======================================================================
     img.save(output_path, format="PNG", dpi=(150, 150))
 
 
