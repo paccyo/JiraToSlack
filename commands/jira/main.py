@@ -2,9 +2,10 @@
 
 
 class CommandJiraRepository:
-    def __init__(self):
-          pass
-    
-    async def execute(self):
-          responce = "Hello World"
-          return responce
+    """Run Jira data queries used by the dashboard and return Slack-friendly text."""
+
+    def __init__():
+        pass    
+        
+    def execute(self):
+        pass

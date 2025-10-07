@@ -1,13 +1,18 @@
-from commands.add_user.main import CommandAddUserResponce
-from commands.del_user.main import CommandDelUserResponce
-from commands.jira.main import CommandJiraRepository
-from commands.jira_get_tasks.main import CommandJiraGetTasksRepository
+from util.get_slack_data import GetSlackData
+
+from commands.jira_backlog_report.main import run_dashboard_and_get_image
 
 
 def register_commands(app):
     """
     Registers all slash commands with the provided app instance.
     """
+
+    from commands.add_user.main import CommandAddUserResponce
+    from commands.del_user.main import CommandDelUserResponce
+    from commands.jira.main import CommandJiraRepository
+    from commands.jira_get_tasks.main import CommandJiraGetTasksRepository
+
     @app.command("/add_user")
     def handle_add_user_command(ack, body, say, client):
         ack()
@@ -15,19 +20,22 @@ def register_commands(app):
         user_name = body["user_name"]
         text = body.get("text", "").strip()
 
+        get_skack_data = GetSlackData()
+        slack_email_to_register = get_skack_data.get_user_email(user_id)
+
         try:
-            email_to_register = ""
+            jira_email_to_regester = None
             if text:
                 # テキストが提供されていれば、それをメールアドレスとして使用
-                email_to_register = text
+                jira_email_to_regester = text
             else:
-                # テキストがなければ、Slackプロフィールのメールアドレスを取得
-                user_info = client.users_info(user=user_id)
-                email_to_register = user_info["user"]["profile"]["email"]
+                # テキストがなければ、Slackmのメールアドレスを使用
+                jira_email_to_regester = slack_email_to_register 
+                
 
             # Firestoreに保存
             command_add_user_repository = CommandAddUserResponce()
-            response = command_add_user_repository.execute(user_id, user_name, email_to_register)
+            response = command_add_user_repository.execute(user_id, user_name, slack_email_to_register, jira_email_to_regester)
             say(response)
         except Exception as e:
             say(f"エラーが発生しました: {e}")          
@@ -45,10 +53,11 @@ def register_commands(app):
             say(f"エラーが発生しました: {e}")
     
     @app.command("/jira")
-    def handle_jira_command(ack, say):
+    def handle_jira_command(ack, body, say):
         ack()
+        text = body["text"]
         command_jira_repository = CommandJiraRepository()
-        responce = command_jira_repository.execute()
+        responce = command_jira_repository.execute(text)
         say(responce)
 
     @app.command("/jira_get_tasks")
@@ -80,3 +89,46 @@ def register_commands(app):
                 say(f"課題 {issue.key} の整形または送信中にエラーが発生しました: {e}")
 
         # say(responce)
+
+
+    @app.command("/jira_backlog_report")
+    def handle_jira_backlog_report_command(ack, client, body, say):
+        print("LOG: /jira_backlog_report command received")
+        try:
+            ack()
+            print("LOG: ack() completed")
+            print(f"LOG: body = {body}")
+            print("LOG: sent user query message")
+            say("処理中...")
+            print("LOG: sent '処理中...' message")
+            print("LOG: calling run_jira_backlog_dashboard()")
+            image_bytes = run_dashboard_and_get_image(say)
+            print(f"LOG: run_jira_backlog_dashboard() returned: {image_bytes}")
+            # if not image_path or not os.path.exists(image_path):
+            #     print(f"LOG: image_path invalid or file does not exist: {image_path}")
+            #     say("画像生成に失敗しました")
+            #     print("LOG: sent '画像生成に失敗しました' message")
+            #     return
+            channel_id = body.get("channel_id")
+            # if not channel_id:
+            #     print(f"LOG: channel_id not found in body: {body}")
+            #     say("Slackリクエストにchannel_idが含まれていません")
+            #     return
+            try:
+                print(f"LOG: uploading image from path: {image_bytes} to channel: {channel_id}")
+                client.files_upload_v2(
+                    channel=channel_id,
+                    content=image_bytes,
+                    filename="generated_image.png",
+                    title="Jiraバックログダッシュボード",
+                    initial_comment="Jiraバックログダッシュボードをアップロードしました",
+                )
+                print("LOG: image upload completed")
+                say("画像を送信しました")
+                print("LOG: sent '画像を送信しました' message")
+            except Exception as e:
+                print(f"LOG: files_upload error: {e}")
+                say(f"画像送信時にエラー: {e}")
+        except Exception as e:
+            print(f"LOG: ハンドラ全体で例外: {e}")
+            say(f"コマンド実行時にエラー: {e}")
